@@ -7,6 +7,7 @@ import TrafficTimeSeriesChart from './components/TrafficTimeSeriesChart';
 import AppBreakdownCard from './components/AppBreakdownCard';
 import PingTestCard from './components/PingTestCard';
 import MiniGadget from './components/MiniGadget';
+import AdBanner from './components/AdBanner';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
 import { loadConfig, saveConfig } from './services/storageService';
@@ -149,6 +150,9 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* Bottom Monetization Sponsor / Ad Banner */}
+      <AdBanner config={config} />
 
       {/* Modals */}
       {showCalibration && (
