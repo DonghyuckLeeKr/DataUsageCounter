@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Wifi, Edit3, Settings, Monitor, Palette, Minus, Square, X, ExternalLink, Globe } from 'lucide-react';
-import { isTauriAvailable } from '../services/networkTelemetry';
+import React from 'react';
+import { Wifi, Edit3, Settings, Monitor, Palette, Globe, ExternalLink } from 'lucide-react';
 import { openRouterAdminPage } from '../services/routerDetectionService';
 
 export default function Header({
@@ -11,52 +10,13 @@ export default function Header({
   onSelectTheme,
   telemetry
 }) {
-  const [isTauri, setIsTauri] = useState(false);
-
-  useEffect(() => {
-    setIsTauri(isTauriAvailable());
-  }, []);
-
-  const handleMinimizeWindow = async () => {
-    if (isTauri) {
-      try {
-        const { appWindow } = await import('@tauri-apps/api/window');
-        await appWindow.minimize();
-      } catch (e) {
-        console.warn(e);
-      }
-    }
-  };
-
-  const handleMaximizeWindow = async () => {
-    if (isTauri) {
-      try {
-        const { appWindow } = await import('@tauri-apps/api/window');
-        await appWindow.toggleMaximize();
-      } catch (e) {
-        console.warn(e);
-      }
-    }
-  };
-
-  const handleCloseWindow = async () => {
-    if (isTauri) {
-      try {
-        const { appWindow } = await import('@tauri-apps/api/window');
-        await appWindow.hide();
-      } catch (e) {
-        console.warn(e);
-      }
-    }
-  };
-
   return (
     <header
       className="glass-panel"
       data-tauri-drag-region
       style={{
         padding: '14px 20px',
-        marginBottom: '20px',
+        marginBottom: '18px',
         cursor: 'grab',
         display: 'flex',
         flexDirection: 'column',
@@ -95,7 +55,7 @@ export default function Header({
           </div>
         </div>
 
-        {/* Right Action Controls & Custom Window Control Buttons */}
+        {/* Right Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           
           {/* Theme Selector Dropdown */}
@@ -164,34 +124,6 @@ export default function Header({
           >
             <Settings size={15} />
           </button>
-
-          {/* Custom OS Window Control Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px', paddingLeft: '8px', borderLeft: '1px solid var(--glass-border)' }}>
-            <button
-              onClick={handleMinimizeWindow}
-              className="glass-btn"
-              style={{ padding: '6px 8px', borderRadius: '6px' }}
-              title="트레이로 최소화"
-            >
-              <Minus size={13} />
-            </button>
-            <button
-              onClick={handleMaximizeWindow}
-              className="glass-btn"
-              style={{ padding: '6px 8px', borderRadius: '6px' }}
-              title="창 최대화 / 복원"
-            >
-              <Square size={12} />
-            </button>
-            <button
-              onClick={handleCloseWindow}
-              className="glass-btn"
-              style={{ padding: '6px 8px', borderRadius: '6px', color: 'var(--accent-rose)' }}
-              title="트레이로 숨기기 (백그라운드 모니터링 지속)"
-            >
-              <X size={14} />
-            </button>
-          </div>
 
         </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import TitleBar from './components/TitleBar';
 import Header from './components/Header';
 import QuickStatsStrip from './components/QuickStatsStrip';
 import QuotaRingCard from './components/QuotaRingCard';
@@ -39,7 +40,7 @@ export default function App() {
         try {
           const { appWindow, LogicalSize } = await import('@tauri-apps/api/window');
           if (config.miniMode) {
-            await appWindow.setSize(new LogicalSize(350, 195));
+            await appWindow.setSize(new LogicalSize(340, 190));
             await appWindow.setAlwaysOnTop(true);
           } else {
             await appWindow.setSize(new LogicalSize(1120, 760));
@@ -93,7 +94,7 @@ export default function App() {
           
           // Check for threshold OS Push Notifications
           const totalGB = calculateTotalUsedGB(updated);
-          checkAndNotifyThresholds(totalGB, updated.monthlyLimitGB || 80, updated.carrierName);
+          checkAndNotifyThresholds(totalGB, updated.monthlyLimitGB || 100, updated.carrierName);
 
           return updated;
         });
@@ -128,13 +129,16 @@ export default function App() {
   // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
     return (
-      <div style={{ padding: '0', display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'transparent' }}>
-        <MiniGadget
-          config={config}
-          telemetry={telemetry}
-          onExpand={handleToggleMiniGadget}
-          onOpenCalibration={() => setShowCalibration(true)}
-        />
+      <div className="app-window-container" style={{ borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+        <TitleBar title="Data Usage Counter - Mini" />
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '6px' }}>
+          <MiniGadget
+            config={config}
+            telemetry={telemetry}
+            onExpand={handleToggleMiniGadget}
+            onOpenCalibration={() => setShowCalibration(true)}
+          />
+        </div>
         {showCalibration && (
           <CalibrationModal
             config={config}
@@ -148,60 +152,68 @@ export default function App() {
 
   // Render Main Full Dashboard View
   return (
-    <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '16px' }}>
+    <div className="app-window-container">
       
-      {/* Top Header */}
-      <Header
-        config={config}
-        onOpenCalibration={() => setShowCalibration(true)}
-        onOpenSettings={() => setShowSettings(true)}
-        onToggleMiniGadget={handleToggleMiniGadget}
-        onSelectTheme={handleSelectTheme}
-        telemetry={telemetry}
-      />
+      {/* Top Fixed TitleBar with Window Controls at Top Right */}
+      <TitleBar title="Data Usage Counter" />
 
-      {/* Top Quick Stats Bar */}
-      <QuickStatsStrip
-        telemetry={telemetry}
-        config={config}
-      />
-
-      {/* 2-Column Responsive Dashboard Layout */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))',
-        gap: '20px',
-        alignItems: 'start'
-      }}>
+      {/* Scrollable Dashboard Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
         
-        {/* Left Column: Data Quota & Rolling Traffic Graph */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <QuotaRingCard
-            config={config}
-            onOpenCalibration={() => setShowCalibration(true)}
-          />
-          <TrafficTimeSeriesChart
-            historyData={historyData}
-            unitMode={config.unitMode}
-          />
+        {/* Top Header */}
+        <Header
+          config={config}
+          onOpenCalibration={() => setShowCalibration(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          onToggleMiniGadget={handleToggleMiniGadget}
+          onSelectTheme={handleSelectTheme}
+          telemetry={telemetry}
+        />
+
+        {/* Top Quick Stats Bar */}
+        <QuickStatsStrip
+          telemetry={telemetry}
+          config={config}
+        />
+
+        {/* 2-Column Responsive Dashboard Layout */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
+          gap: '18px',
+          alignItems: 'start'
+        }}>
+          
+          {/* Left Column: Data Quota & Rolling Traffic Graph */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <QuotaRingCard
+              config={config}
+              onOpenCalibration={() => setShowCalibration(true)}
+            />
+            <TrafficTimeSeriesChart
+              historyData={historyData}
+              unitMode={config.unitMode}
+            />
+          </div>
+
+          {/* Right Column: Speed Meters, Latency Ping, App Usage */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <LiveSpeedCard
+              telemetry={telemetry}
+              unitMode={config.unitMode}
+            />
+            <PingTestCard />
+            <AppBreakdownCard
+              sessionBytes={config.sessionBytes || 0}
+            />
+          </div>
+
         </div>
 
-        {/* Right Column: Speed Meters, Latency Ping, App Usage */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <LiveSpeedCard
-            telemetry={telemetry}
-            unitMode={config.unitMode}
-          />
-          <PingTestCard />
-          <AppBreakdownCard
-            sessionBytes={config.sessionBytes || 0}
-          />
-        </div>
+        {/* Bottom Monetization Sponsor / Ad Banner */}
+        <AdBanner config={config} />
 
       </div>
-
-      {/* Bottom Monetization Sponsor / Ad Banner */}
-      <AdBanner config={config} />
 
       {/* Modals */}
       {showCalibration && (
