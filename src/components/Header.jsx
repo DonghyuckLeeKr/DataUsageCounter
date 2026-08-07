@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Wifi, Edit3, Settings, Monitor, Palette, Minus, Square, X } from 'lucide-react';
+import { Wifi, Edit3, Settings, Monitor, Palette, Minus, Square, X, ExternalLink, Globe } from 'lucide-react';
 import { isTauriAvailable } from '../services/networkTelemetry';
+import { openRouterAdminPage } from '../services/routerDetectionService';
 
 export default function Header({
   config,
@@ -119,6 +120,18 @@ export default function Header({
               <option value="neon-cyber" style={{ background: '#0f172a', color: '#ff007a' }}>⚡ 네온 사이버 (강한 형광)</option>
             </select>
           </div>
+
+          {/* Open Router Admin Page Button */}
+          <button
+            onClick={() => openRouterAdminPage()}
+            className="glass-btn"
+            style={{ padding: '6px 12px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)' }}
+            title="LTE 라우터 웹 관리자 페이지(http://192.168.0.1) 열기"
+          >
+            <Globe size={14} />
+            <span>라우터 웹 관리자</span>
+            <ExternalLink size={12} />
+          </button>
 
           {/* Carrier Calibration Button */}
           <button
