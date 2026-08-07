@@ -1,5 +1,6 @@
-import React from 'react';
-import { Wifi, Edit3, Settings, Monitor, Palette } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wifi, Edit3, Settings, Monitor, Palette, Minus, Square, X } from 'lucide-react';
+import { isTauriAvailable } from '../services/networkTelemetry';
 
 export default function Header({
   config,
@@ -9,56 +10,106 @@ export default function Header({
   onSelectTheme,
   telemetry
 }) {
+  const [isTauri, setIsTauri] = useState(false);
+
+  useEffect(() => {
+    setIsTauri(isTauriAvailable());
+  }, []);
+
+  const handleMinimizeWindow = async () => {
+    if (isTauri) {
+      try {
+        const { appWindow } = await import('@tauri-apps/api/window');
+        await appWindow.minimize();
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+  };
+
+  const handleMaximizeWindow = async () => {
+    if (isTauri) {
+      try {
+        const { appWindow } = await import('@tauri-apps/api/window');
+        await appWindow.toggleMaximize();
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+  };
+
+  const handleCloseWindow = async () => {
+    if (isTauri) {
+      try {
+        const { appWindow } = await import('@tauri-apps/api/window');
+        await appWindow.hide(); // Hide to system tray
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+  };
+
   return (
-    <header className="glass-panel" style={{ padding: '16px 24px', marginBottom: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+    <header
+      className="glass-panel"
+      data-tauri-drag-region
+      style={{
+        padding: '14px 20px',
+        marginBottom: '20px',
+        cursor: 'grab',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px'
+      }}
+    >
+      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
         
-        {/* Left Branding */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {/* Left Branding (Draggable region) */}
+        <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '14px',
+            width: '38px',
+            height: '38px',
+            borderRadius: '12px',
             background: 'var(--brand-color)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)'
+            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+            pointerEvents: 'none'
           }}>
-            <Wifi size={22} color="#fff" />
+            <Wifi size={20} color="#fff" />
           </div>
 
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
+          <div data-tauri-drag-region>
+            <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h1 data-tauri-drag-region style={{ fontSize: '1.15rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
                 Data Usage Counter
               </h1>
               <span className="lguplus-badge">{config.carrierName || 'LG U+ 80GB'}</span>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <p data-tauri-drag-region style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
               {config.selectedInterface || 'ALL 인터페이스'} · 실시간 모니터링 중
             </p>
           </div>
         </div>
 
-        {/* Right Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {/* Right Action Controls & Custom Window Control Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           
           {/* Theme Selector Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Palette size={16} color="var(--text-muted)" />
+            <Palette size={15} color="var(--text-muted)" />
             <select
               value={config.theme || 'soft-dark'}
               onChange={(e) => onSelectTheme(e.target.value)}
               className="glass-input"
               style={{
-                padding: '6px 12px',
-                fontSize: '0.8rem',
+                padding: '5px 10px',
+                fontSize: '0.78rem',
                 width: 'auto',
                 cursor: 'pointer',
-                borderRadius: '10px',
-                background: 'rgba(0, 0, 0, 0.2)'
+                borderRadius: '8px'
               }}
               title="디자인 테마 선택"
             >
@@ -73,10 +124,10 @@ export default function Header({
           <button
             onClick={onOpenCalibration}
             className="glass-btn"
+            style={{ padding: '6px 12px', fontSize: '0.78rem', borderColor: 'var(--brand-badge-border)', color: 'var(--brand-color)' }}
             title="통신사 홈페이지 조회 사용량 입력 및 보정"
-            style={{ borderColor: 'var(--brand-badge-border)', color: 'var(--brand-color)' }}
           >
-            <Edit3 size={15} />
+            <Edit3 size={14} />
             <span>사용량 보정</span>
           </button>
 
@@ -84,9 +135,10 @@ export default function Header({
           <button
             onClick={onToggleMiniGadget}
             className="glass-btn"
+            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
             title="화면 구석 상시 고정 미니 가젯으로 전환"
           >
-            <Monitor size={15} />
+            <Monitor size={14} />
             <span>미니 가젯</span>
           </button>
 
@@ -94,11 +146,39 @@ export default function Header({
           <button
             onClick={onOpenSettings}
             className="glass-btn"
-            style={{ padding: '9px 12px' }}
+            style={{ padding: '6px 10px' }}
             title="설정 및 어댑터 변경"
           >
-            <Settings size={16} />
+            <Settings size={15} />
           </button>
+
+          {/* Custom OS Window Control Buttons (Frameless Window Controls) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px', paddingLeft: '8px', borderLeft: '1px solid var(--glass-border)' }}>
+            <button
+              onClick={handleMinimizeWindow}
+              className="glass-btn"
+              style={{ padding: '6px 8px', borderRadius: '6px' }}
+              title="트레이로 최소화"
+            >
+              <Minus size={13} />
+            </button>
+            <button
+              onClick={handleMaximizeWindow}
+              className="glass-btn"
+              style={{ padding: '6px 8px', borderRadius: '6px' }}
+              title="창 최대화 / 복원"
+            >
+              <Square size={12} />
+            </button>
+            <button
+              onClick={handleCloseWindow}
+              className="glass-btn"
+              style={{ padding: '6px 8px', borderRadius: '6px', color: 'var(--accent-rose)' }}
+              title="트레이로 숨기기 (백그라운드 모니터링 지속)"
+            >
+              <X size={14} />
+            </button>
+          </div>
 
         </div>
 

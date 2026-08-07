@@ -10,8 +10,9 @@ import MiniGadget from './components/MiniGadget';
 import AdBanner from './components/AdBanner';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
-import { loadConfig, saveConfig } from './services/storageService';
-import { fetchRealtimeStats } from './services/networkTelemetry';
+import { loadConfig, saveConfig, calculateTotalUsedGB } from './services/storageService';
+import { fetchRealtimeStats, isTauriAvailable } from './services/networkTelemetry';
+import { checkAndNotifyThresholds } from './services/notificationService';
 
 export default function App() {
   const [config, setConfig] = useState(loadConfig);
@@ -31,6 +32,49 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', config.theme || 'soft-dark');
   }, [config.theme]);
 
+  // Adjust Tauri window size & always-on-top mode dynamically when switching miniMode
+  useEffect(() => {
+    const syncWindowMode = async () => {
+      if (isTauriAvailable()) {
+        try {
+          const { appWindow, LogicalSize } = await import('@tauri-apps/api/window');
+          if (config.miniMode) {
+            await appWindow.setSize(new LogicalSize(350, 195));
+            await appWindow.setAlwaysOnTop(true);
+          } else {
+            await appWindow.setSize(new LogicalSize(1120, 760));
+            await appWindow.setAlwaysOnTop(false);
+          }
+        } catch (e) {
+          console.warn('Failed to resize window via Tauri API', e);
+        }
+      }
+    };
+    syncWindowMode();
+  }, [config.miniMode]);
+
+  // Listen for Tauri IPC System Tray events ("toggle-mini")
+  useEffect(() => {
+    let unlisten = null;
+    const listenTrayEvents = async () => {
+      if (isTauriAvailable()) {
+        try {
+          const { listen } = await import('@tauri-apps/api/event');
+          unlisten = await listen('toggle-mini', (event) => {
+            const isMini = Boolean(event.payload);
+            handleUpdateConfig({ miniMode: isMini });
+          });
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    };
+    listenTrayEvents();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   // Real-time telemetry tick (every 1 second)
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -46,6 +90,11 @@ export default function App() {
             sessionBytes: (prev.sessionBytes || 0) + addedBytes
           };
           saveConfig(updated);
+          
+          // Check for threshold OS Push Notifications
+          const totalGB = calculateTotalUsedGB(updated);
+          checkAndNotifyThresholds(totalGB, updated.monthlyLimitGB || 80, updated.carrierName);
+
           return updated;
         });
       }
@@ -79,7 +128,7 @@ export default function App() {
   // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
     return (
-      <div style={{ padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <div style={{ padding: '0', display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'transparent' }}>
         <MiniGadget
           config={config}
           telemetry={telemetry}
@@ -99,7 +148,7 @@ export default function App() {
 
   // Render Main Full Dashboard View
   return (
-    <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '20px' }}>
+    <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '16px' }}>
       
       {/* Top Header */}
       <Header

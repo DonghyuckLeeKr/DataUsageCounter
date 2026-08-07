@@ -4,7 +4,10 @@
 use std::sync::{Arc, Mutex};
 use sysinfo::Networks;
 use serde::{Serialize, Deserialize};
-use tauri::State;
+use tauri::{
+    State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem,
+    SystemTrayEvent, Manager, WindowEvent
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkInterfaceInfo {
@@ -99,8 +102,61 @@ fn main() {
         last_tx: Arc::new(Mutex::new(0)),
     };
 
+    // System Tray Menu Items
+    let show = CustomMenuItem::new("show".to_string(), "대시보드 열기 (Open)");
+    let mini = CustomMenuItem::new("mini".to_string(), "미니 가젯 모드 (Mini Gadget)");
+    let quit = CustomMenuItem::new("quit".to_string(), "종료 (Exit)");
+    let tray_menu = SystemTrayMenu::new()
+        .add_item(show)
+        .add_item(mini)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(quit);
+
+    let system_tray = SystemTray::new().with_menu(tray_menu);
+
     tauri::Builder::default()
         .manage(state)
+        .system_tray(system_tray)
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::LeftClick { .. } => {
+                if let Some(window) = app.get_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+            }
+            SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                "show" => {
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                        let _ = window.emit("toggle-mini", false);
+                    }
+                }
+                "mini" => {
+                    if let Some(window) = app.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                        let _ = window.emit("toggle-mini", true);
+                    }
+                }
+                "quit" => {
+                    std::process::exit(0);
+                }
+                _ => {}
+            },
+            _ => {}
+        })
+        .on_window_event(|event| match event.event() {
+            WindowEvent::CloseRequested { api, .. } => {
+                // Intercept close button to hide window to system tray
+                api.prevent_close();
+                let _ = event.window().hide();
+            }
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             get_network_interfaces,
             get_realtime_stats
