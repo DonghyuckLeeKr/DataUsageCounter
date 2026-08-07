@@ -5,7 +5,7 @@ import { getDaysRemainingInMonth, calculateDailyBudget } from '../utils/formatte
 
 export default function QuotaRingCard({ config, onOpenCalibration }) {
   const totalUsedGB = calculateTotalUsedGB(config);
-  const limitGB = config.monthlyLimitGB || 80;
+  const limitGB = config.monthlyLimitGB || 100;
   const remainingGB = Math.max(0, limitGB - totalUsedGB);
   const percentage = Math.min(100, Math.max(0, (totalUsedGB / limitGB) * 100));
 
@@ -46,7 +46,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
             월간 데이터 한도 & 일일 가이드
           </h3>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {config.carrierName || 'LG U+ 데이터 쉐어링'} (월 {limitGB}GB)
+            {config.carrierName || '모바일 데이터 요금제'} (월 {limitGB}GB)
           </span>
         </div>
 

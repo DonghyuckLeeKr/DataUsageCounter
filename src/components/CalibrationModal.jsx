@@ -3,12 +3,12 @@ import { X, Check, Edit3, HelpCircle, RefreshCw, Radio, Sparkles } from 'lucide-
 import { detectLteRouterCarrier } from '../services/routerDetectionService';
 
 export default function CalibrationModal({ config, onSave, onClose }) {
-  const [carrierInput, setCarrierInput] = useState(config.carrierName || 'LG U+ 데이터 쉐어링');
+  const [carrierInput, setCarrierInput] = useState(config.carrierName || '모바일 데이터 요금제');
   const [baselineInput, setBaselineInput] = useState(
     config.initialBaselineGB !== undefined ? String(config.initialBaselineGB) : '0'
   );
   const [limitInput, setLimitInput] = useState(
-    config.monthlyLimitGB !== undefined ? String(config.monthlyLimitGB) : '80'
+    config.monthlyLimitGB !== undefined ? String(config.monthlyLimitGB) : '100'
   );
   const [resetDayInput, setResetDayInput] = useState(
     config.resetDay !== undefined ? String(config.resetDay) : '1'
@@ -31,7 +31,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
   const handleFormSubmit = (e) => {
     e.preventDefault();
     const parsedBaseline = parseFloat(baselineInput) || 0;
-    const parsedLimit = parseFloat(limitInput) || 80;
+    const parsedLimit = parseFloat(limitInput) || 100;
     const parsedResetDay = parseInt(resetDayInput, 10) || 1;
 
     onSave({
@@ -106,7 +106,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
           <div>
             <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-main)' }}>통신사 사용량 보정 & USIM 감지</h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              LTE 라우터 USIM 자동 감지 및 현재 사용량을 보정합니다.
+              통신사 이름, 월간 한도, 현재 사용량을 직접 설정합니다.
             </p>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
               value={carrierInput}
               onChange={(e) => setCarrierInput(e.target.value)}
               className="glass-input"
-              placeholder="예: LG U+ 데이터 쉐어링, SKT 함께쓰기, KT 100GB 등"
+              placeholder="예: 데이터 함께쓰기, LTE/5G 무제한, 100GB 등"
               required
             />
           </div>
@@ -193,7 +193,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
           {/* Monthly Limit Input */}
           <div>
             <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              월간 데이터 총 한도 (기본: 80 GB)
+              월간 데이터 총 한도 (GB)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input
@@ -204,7 +204,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
                 value={limitInput}
                 onChange={(e) => setLimitInput(e.target.value)}
                 className="glass-input"
-                placeholder="80"
+                placeholder="100"
                 required
               />
               <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB</span>

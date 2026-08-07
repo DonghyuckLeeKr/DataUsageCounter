@@ -42,7 +42,7 @@ export default function Header({
     if (isTauri) {
       try {
         const { appWindow } = await import('@tauri-apps/api/window');
-        await appWindow.hide(); // Hide to system tray
+        await appWindow.hide();
       } catch (e) {
         console.warn(e);
       }
@@ -85,7 +85,7 @@ export default function Header({
               <h1 data-tauri-drag-region style={{ fontSize: '1.15rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
                 Data Usage Counter
               </h1>
-              <span className="lguplus-badge">{config.carrierName || 'LG U+ 80GB'}</span>
+              <span className="lguplus-badge">{config.carrierName || '모바일 데이터'}</span>
             </div>
             <p data-tauri-drag-region style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
@@ -152,7 +152,7 @@ export default function Header({
             <Settings size={15} />
           </button>
 
-          {/* Custom OS Window Control Buttons (Frameless Window Controls) */}
+          {/* Custom OS Window Control Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px', paddingLeft: '8px', borderLeft: '1px solid var(--glass-border)' }}>
             <button
               onClick={handleMinimizeWindow}

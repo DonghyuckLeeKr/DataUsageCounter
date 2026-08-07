@@ -6,7 +6,7 @@ import { isTauriAvailable } from '../services/networkTelemetry';
 
 export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibration }) {
   const totalUsedGB = calculateTotalUsedGB(config);
-  const limitGB = config.monthlyLimitGB || 80;
+  const limitGB = config.monthlyLimitGB || 100;
   const remainingGB = Math.max(0, limitGB - totalUsedGB);
   const percentage = Math.min(100, Math.max(0, (totalUsedGB / limitGB) * 100));
 
@@ -141,10 +141,10 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
 
       </div>
 
-      {/* 80GB Quota Bar */}
+      {/* Quota Bar */}
       <div data-tauri-drag-region>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginBottom: '4px' }}>
-          <span style={{ color: 'var(--text-muted)' }}>{config.carrierName || '80GB 한도'}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{config.carrierName || '월간 데이터'}</span>
           <span style={{ fontWeight: '700', color: statusColor }}>
             {totalUsedGB.toFixed(1)} / {limitGB} GB ({percentage.toFixed(0)}%)
           </span>

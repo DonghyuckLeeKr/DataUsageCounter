@@ -3,9 +3,9 @@
 const STORAGE_KEY = 'data_usage_counter_v1_config';
 
 const DEFAULT_CONFIG = {
-  carrierName: 'LG U+ 데이터 쉐어링',
-  monthlyLimitGB: 80,
-  initialBaselineGB: 0, // Calibrated used GB from LG U+ website
+  carrierName: '모바일 데이터 요금제',
+  monthlyLimitGB: 100,  // Neutral default 100GB limit
+  initialBaselineGB: 0, // Calibrated used GB from carrier portal
   sessionBytes: 0,      // Bytes measured by app telemetry since last calibration/reset
   resetDay: 1,          // 1st of every month
   lastResetPeriod: '',  // 'YYYY-MM'
