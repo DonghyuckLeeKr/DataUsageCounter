@@ -1,0 +1,172 @@
+import React, { useState, useEffect } from 'react';
+import Header from './components/Header';
+import QuickStatsStrip from './components/QuickStatsStrip';
+import QuotaRingCard from './components/QuotaRingCard';
+import LiveSpeedCard from './components/LiveSpeedCard';
+import TrafficTimeSeriesChart from './components/TrafficTimeSeriesChart';
+import AppBreakdownCard from './components/AppBreakdownCard';
+import PingTestCard from './components/PingTestCard';
+import MiniGadget from './components/MiniGadget';
+import CalibrationModal from './components/CalibrationModal';
+import SettingsModal from './components/SettingsModal';
+import { loadConfig, saveConfig } from './services/storageService';
+import { fetchRealtimeStats } from './services/networkTelemetry';
+
+export default function App() {
+  const [config, setConfig] = useState(loadConfig);
+  const [telemetry, setTelemetry] = useState({
+    downloadSpeed: 0,
+    uploadSpeed: 0,
+    totalRx: 0,
+    totalTx: 0,
+    interfaces: []
+  });
+  const [historyData, setHistoryData] = useState([]);
+  const [showCalibration, setShowCalibration] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Sync theme attribute to document root element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', config.theme || 'soft-dark');
+  }, [config.theme]);
+
+  // Real-time telemetry tick (every 1 second)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const stats = await fetchRealtimeStats(config.selectedInterface);
+      setTelemetry(stats);
+
+      // Accumulate bytes into config sessionBytes
+      const addedBytes = (stats.downloadSpeed || 0) + (stats.uploadSpeed || 0);
+      if (addedBytes > 0) {
+        setConfig(prev => {
+          const updated = {
+            ...prev,
+            sessionBytes: (prev.sessionBytes || 0) + addedBytes
+          };
+          saveConfig(updated);
+          return updated;
+        });
+      }
+
+      // Update rolling time-series graph (keep last 60 ticks)
+      setHistoryData(prev => {
+        const next = [...prev, { downloadSpeed: stats.downloadSpeed, uploadSpeed: stats.uploadSpeed, time: new Date() }];
+        if (next.length > 60) next.shift();
+        return next;
+      });
+
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [config.selectedInterface]);
+
+  const handleUpdateConfig = (newPartial) => {
+    const updated = { ...config, ...newPartial };
+    setConfig(updated);
+    saveConfig(updated);
+  };
+
+  const handleSelectTheme = (themeName) => {
+    handleUpdateConfig({ theme: themeName });
+  };
+
+  const handleToggleMiniGadget = () => {
+    handleUpdateConfig({ miniMode: !config.miniMode });
+  };
+
+  // Render Always-on-top Mini Gadget View if miniMode is active
+  if (config.miniMode) {
+    return (
+      <div style={{ padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <MiniGadget
+          config={config}
+          telemetry={telemetry}
+          onExpand={handleToggleMiniGadget}
+          onOpenCalibration={() => setShowCalibration(true)}
+        />
+        {showCalibration && (
+          <CalibrationModal
+            config={config}
+            onSave={handleUpdateConfig}
+            onClose={() => setShowCalibration(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Render Main Full Dashboard View
+  return (
+    <div style={{ maxWidth: '1240px', margin: '0 auto', padding: '20px' }}>
+      
+      {/* Top Header */}
+      <Header
+        config={config}
+        onOpenCalibration={() => setShowCalibration(true)}
+        onOpenSettings={() => setShowSettings(true)}
+        onToggleMiniGadget={handleToggleMiniGadget}
+        onSelectTheme={handleSelectTheme}
+        telemetry={telemetry}
+      />
+
+      {/* Top Quick Stats Bar */}
+      <QuickStatsStrip
+        telemetry={telemetry}
+        config={config}
+      />
+
+      {/* 2-Column Responsive Dashboard Layout */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))',
+        gap: '20px',
+        alignItems: 'start'
+      }}>
+        
+        {/* Left Column: Data Quota & Rolling Traffic Graph */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <QuotaRingCard
+            config={config}
+            onOpenCalibration={() => setShowCalibration(true)}
+          />
+          <TrafficTimeSeriesChart
+            historyData={historyData}
+            unitMode={config.unitMode}
+          />
+        </div>
+
+        {/* Right Column: Speed Meters, Latency Ping, App Usage */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <LiveSpeedCard
+            telemetry={telemetry}
+            unitMode={config.unitMode}
+          />
+          <PingTestCard />
+          <AppBreakdownCard
+            sessionBytes={config.sessionBytes || 0}
+          />
+        </div>
+
+      </div>
+
+      {/* Modals */}
+      {showCalibration && (
+        <CalibrationModal
+          config={config}
+          onSave={handleUpdateConfig}
+          onClose={() => setShowCalibration(false)}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsModal
+          config={config}
+          onSave={handleUpdateConfig}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+    </div>
+  );
+}
