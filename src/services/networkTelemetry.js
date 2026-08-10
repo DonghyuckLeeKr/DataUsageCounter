@@ -10,13 +10,18 @@ let simState = {
 };
 
 const getTauriInvoke = async () => {
-  if (typeof window !== 'undefined' && window.__TAURI__?.invoke) {
-    return window.__TAURI__.invoke;
+  if (typeof window !== 'undefined') {
+    if (window.__TAURI__?.tauri?.invoke) {
+      return window.__TAURI__.tauri.invoke;
+    }
+    if (window.__TAURI__?.invoke) {
+      return window.__TAURI__.invoke;
+    }
   }
   try {
-    const corePkg = '@tauri-apps/api/core';
-    const core = await import(/* @vite-ignore */ corePkg);
-    if (core?.invoke) return core.invoke;
+    const tauriPkg = '@tauri-apps/api/tauri';
+    const { invoke } = await import(/* @vite-ignore */ tauriPkg);
+    if (invoke) return invoke;
   } catch (e) {
     // ignore
   }
@@ -45,26 +50,72 @@ export const fetchNetworkInterfaces = async () => {
   ];
 };
 
+export const terminateProcess = async (targetPid) => {
+  if (isTauriAvailable()) {
+    try {
+      const invoke = await getTauriInvoke();
+      if (invoke) {
+        return await invoke('kill_process', { targetPid });
+      }
+    } catch (e) {
+      console.warn('Failed to terminate process via Tauri', e);
+    }
+  }
+  return true;
+};
+
+export const fetchActiveProcesses = async () => {
+  if (isTauriAvailable()) {
+    try {
+      const invoke = await getTauriInvoke();
+      if (invoke) {
+        const list = await invoke('get_top_processes');
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map(p => ({
+            name: p.name,
+            pid: p.pid,
+            downloadSpeedBytes: p.download_speed_bytes || 0,
+            uploadSpeedBytes: p.upload_speed_bytes || 0,
+            targetDomain: p.target_domain || 'Unknown Network Remote Host',
+            isReal: true
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch active processes via Tauri', e);
+    }
+  }
+
+  // Fallback simulation for Web Browser Preview mode
+  return [
+    { name: 'chrome.exe (웹 미리보기 데모)', pid: 14208, downloadSpeedBytes: 2450000, uploadSpeedBytes: 120000, targetDomain: 'Google / YouTube (video.googlevideo.com)', isReal: false },
+    { name: 'svchost.exe (웹 미리보기 데모)', pid: 2104, downloadSpeedBytes: 1850000, uploadSpeedBytes: 45000, targetDomain: 'Windows Update CDN (delivery.mp.microsoft.com)', isReal: false },
+    { name: 'steam.exe (웹 미리보기 데모)', pid: 8204, downloadSpeedBytes: 950000, uploadSpeedBytes: 20000, targetDomain: 'Steam Content Server (steamcontent.com)', isReal: false }
+  ];
+};
+
 export const fetchRealtimeStats = async (selectedInterface = 'ALL (전체 인터페이스)') => {
   if (isTauriAvailable()) {
     try {
       const invoke = await getTauriInvoke();
       if (invoke) {
         const res = await invoke('get_realtime_stats', { targetInterface: selectedInterface });
-        return {
-          downloadSpeed: res.download_bytes_sec,
-          uploadSpeed: res.upload_bytes_sec,
-          totalRx: res.total_rx_bytes,
-          totalTx: res.total_tx_bytes,
-          interfaces: res.interfaces || []
-        };
+        if (res) {
+          return {
+            downloadSpeed: res.download_bytes_sec || 0,
+            uploadSpeed: res.upload_bytes_sec || 0,
+            totalRx: res.total_rx_bytes || 0,
+            totalTx: res.total_tx_bytes || 0,
+            interfaces: res.interfaces || []
+          };
+        }
       }
     } catch (e) {
       console.warn('Tauri stats failed, falling back to Web telemetry generator', e);
     }
   }
 
-  // Realistic USB LTE Router Telemetry Generator for Web preview
+  // Realistic USB LTE Router Telemetry Generator for Web preview / fallback
   const isSpike = Math.random() < 0.25;
   const isIdle = Math.random() < 0.1;
   

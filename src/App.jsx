@@ -8,7 +8,6 @@ import TrafficTimeSeriesChart from './components/TrafficTimeSeriesChart';
 import AppBreakdownCard from './components/AppBreakdownCard';
 import PingTestCard from './components/PingTestCard';
 import MiniGadget from './components/MiniGadget';
-import AdBanner from './components/AdBanner';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
 import { loadConfig, saveConfig, calculateTotalUsedGB } from './services/storageService';
@@ -40,7 +39,7 @@ export default function App() {
         try {
           const { appWindow, LogicalSize } = await import('@tauri-apps/api/window');
           if (config.miniMode) {
-            await appWindow.setSize(new LogicalSize(340, 190));
+            await appWindow.setSize(new LogicalSize(320, 150));
             await appWindow.setAlwaysOnTop(true);
           } else {
             await appWindow.setSize(new LogicalSize(1120, 760));
@@ -79,34 +78,39 @@ export default function App() {
   // Real-time telemetry tick (every 1 second)
   useEffect(() => {
     const interval = setInterval(async () => {
-      const stats = await fetchRealtimeStats(config.selectedInterface);
-      setTelemetry(stats);
+      try {
+        const stats = await fetchRealtimeStats(config.selectedInterface);
+        if (stats) {
+          setTelemetry(stats);
 
-      // Accumulate bytes into config sessionBytes
-      const addedBytes = (stats.downloadSpeed || 0) + (stats.uploadSpeed || 0);
-      if (addedBytes > 0) {
-        setConfig(prev => {
-          const updated = {
-            ...prev,
-            sessionBytes: (prev.sessionBytes || 0) + addedBytes
-          };
-          saveConfig(updated);
-          
-          // Check for threshold OS Push Notifications
-          const totalGB = calculateTotalUsedGB(updated);
-          checkAndNotifyThresholds(totalGB, updated.monthlyLimitGB || 100, updated.carrierName);
+          // Accumulate bytes into config sessionBytes
+          const addedBytes = (stats.downloadSpeed || 0) + (stats.uploadSpeed || 0);
+          if (addedBytes > 0) {
+            setConfig(prev => {
+              const updated = {
+                ...prev,
+                sessionBytes: (prev.sessionBytes || 0) + addedBytes
+              };
+              saveConfig(updated);
+              
+              // Check for threshold OS Push Notifications
+              const totalGB = calculateTotalUsedGB(updated);
+              checkAndNotifyThresholds(totalGB, updated.monthlyLimitGB || 100, updated.carrierName);
 
-          return updated;
-        });
+              return updated;
+            });
+          }
+
+          // Update rolling time-series graph (keep last 60 ticks)
+          setHistoryData(prev => {
+            const next = [...prev, { downloadSpeed: stats.downloadSpeed, uploadSpeed: stats.uploadSpeed, time: new Date() }];
+            if (next.length > 60) next.shift();
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error('Telemetry tick error', err);
       }
-
-      // Update rolling time-series graph (keep last 60 ticks)
-      setHistoryData(prev => {
-        const next = [...prev, { downloadSpeed: stats.downloadSpeed, uploadSpeed: stats.uploadSpeed, time: new Date() }];
-        if (next.length > 60) next.shift();
-        return next;
-      });
-
     }, 1000);
 
     return () => clearInterval(interval);
@@ -126,19 +130,16 @@ export default function App() {
     handleUpdateConfig({ miniMode: !config.miniMode });
   };
 
-  // Render Always-on-top Mini Gadget View if miniMode is active
+  // Render Always-on-top Mini Gadget View if miniMode is active (100% compact window, no blank margins)
   if (config.miniMode) {
     return (
-      <div className="app-window-container" style={{ borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
-        <TitleBar title="Data Usage Counter - Mini" />
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '6px' }}>
-          <MiniGadget
-            config={config}
-            telemetry={telemetry}
-            onExpand={handleToggleMiniGadget}
-            onOpenCalibration={() => setShowCalibration(true)}
-          />
-        </div>
+      <div style={{ width: '100vw', height: '100vh', background: 'transparent', overflow: 'hidden' }}>
+        <MiniGadget
+          config={config}
+          telemetry={telemetry}
+          onExpand={handleToggleMiniGadget}
+          onOpenCalibration={() => setShowCalibration(true)}
+        />
         {showCalibration && (
           <CalibrationModal
             config={config}
@@ -184,7 +185,7 @@ export default function App() {
           alignItems: 'start'
         }}>
           
-          {/* Left Column: Data Quota & Rolling Traffic Graph */}
+          {/* Left Column: Data Quota (with embedded short recommendation pill) & Rolling Traffic Graph */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <QuotaRingCard
               config={config}
@@ -209,9 +210,6 @@ export default function App() {
           </div>
 
         </div>
-
-        {/* Bottom Monetization Sponsor / Ad Banner */}
-        <AdBanner config={config} />
 
       </div>
 

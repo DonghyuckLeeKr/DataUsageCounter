@@ -1,41 +1,63 @@
 import React from 'react';
 import { Minus, Square, X } from 'lucide-react';
-import { isTauriAvailable } from '../services/networkTelemetry';
 
 export default function TitleBar({ title = "Data Usage Counter" }) {
+  const getAppWindow = async () => {
+    if (typeof window !== 'undefined' && window.__TAURI__?.window?.appWindow) {
+      return window.__TAURI__.window.appWindow;
+    }
+    try {
+      const winPkg = '@tauri-apps/api/window';
+      const { appWindow } = await import(/* @vite-ignore */ winPkg);
+      if (appWindow) return appWindow;
+    } catch (e) {
+      console.warn('Failed to import Tauri appWindow', e);
+    }
+    return null;
+  };
+
   const handleMinimize = async (e) => {
     e.stopPropagation();
-    if (isTauriAvailable()) {
+    e.preventDefault();
+    const appWindow = await getAppWindow();
+    if (appWindow) {
       try {
-        const { appWindow } = await import('@tauri-apps/api/window');
         await appWindow.minimize();
       } catch (err) {
         console.error('Minimize failed', err);
       }
+    } else {
+      console.log('[Browser Fallback] Minimize clicked');
     }
   };
 
   const handleMaximize = async (e) => {
     e.stopPropagation();
-    if (isTauriAvailable()) {
+    e.preventDefault();
+    const appWindow = await getAppWindow();
+    if (appWindow) {
       try {
-        const { appWindow } = await import('@tauri-apps/api/window');
         await appWindow.toggleMaximize();
       } catch (err) {
         console.error('Maximize failed', err);
       }
+    } else {
+      console.log('[Browser Fallback] Maximize clicked');
     }
   };
 
   const handleClose = async (e) => {
     e.stopPropagation();
-    if (isTauriAvailable()) {
+    e.preventDefault();
+    const appWindow = await getAppWindow();
+    if (appWindow) {
       try {
-        const { appWindow } = await import('@tauri-apps/api/window');
         await appWindow.hide(); // Hide to system tray
       } catch (err) {
         console.error('Close to tray failed', err);
       }
+    } else {
+      console.log('[Browser Fallback] Close clicked');
     }
   };
 
@@ -62,19 +84,21 @@ export default function TitleBar({ title = "Data Usage Counter" }) {
         {title}
       </span>
 
-      {/* Top Right Window Control Buttons (Non-draggable so clicks fire onClick!) */}
+      {/* Top Right Window Control Buttons (Non-draggable container so clicks fire onClick!) */}
       <div
         data-tauri-drag-region="false"
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '2px',
-          height: '100%'
+          height: '100%',
+          zIndex: 10000
         }}
       >
         {/* Minimize Button */}
         <button
           onClick={handleMinimize}
+          onMouseDown={(e) => e.stopPropagation()}
           type="button"
           style={{
             width: '42px',
@@ -98,6 +122,7 @@ export default function TitleBar({ title = "Data Usage Counter" }) {
         {/* Maximize Button */}
         <button
           onClick={handleMaximize}
+          onMouseDown={(e) => e.stopPropagation()}
           type="button"
           style={{
             width: '42px',
@@ -121,6 +146,7 @@ export default function TitleBar({ title = "Data Usage Counter" }) {
         {/* Close Button */}
         <button
           onClick={handleClose}
+          onMouseDown={(e) => e.stopPropagation()}
           type="button"
           style={{
             width: '42px',

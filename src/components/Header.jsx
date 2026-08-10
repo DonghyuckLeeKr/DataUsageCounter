@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, Edit3, Settings, Monitor, Palette, Globe, ExternalLink } from 'lucide-react';
+import { Edit3, Settings, Monitor, Palette, Globe, ExternalLink } from 'lucide-react';
 import { openRouterAdminPage } from '../services/routerDetectionService';
 
 export default function Header({
@@ -31,14 +31,16 @@ export default function Header({
             width: '38px',
             height: '38px',
             borderRadius: '12px',
-            background: 'var(--brand-color)',
+            background: 'rgba(255, 255, 255, 0.06)',
+            border: '1px solid var(--glass-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-            pointerEvents: 'none'
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
+            pointerEvents: 'none',
+            overflow: 'hidden'
           }}>
-            <Wifi size={20} color="#fff" />
+            <img src="/icon.png" alt="Dolphin Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
           </div>
 
           <div data-tauri-drag-region>
