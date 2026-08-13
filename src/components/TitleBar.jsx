@@ -1,7 +1,9 @@
-import React from 'react';
-import { Minus, Square, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Minus, Square, Copy, X } from 'lucide-react';
 
-export default function TitleBar({ title = "Data Usage Counter" }) {
+export default function TitleBar({ title = "돌핀 데이터 (Dolphin Data)" }) {
+  const [isMaximized, setIsMaximized] = useState(false);
+
   const getAppWindow = async () => {
     if (typeof window !== 'undefined' && window.__TAURI__?.window?.appWindow) {
       return window.__TAURI__.window.appWindow;
@@ -26,23 +28,20 @@ export default function TitleBar({ title = "Data Usage Counter" }) {
       } catch (err) {
         console.error('Minimize failed', err);
       }
-    } else {
-      console.log('[Browser Fallback] Minimize clicked');
     }
   };
 
-  const handleMaximize = async (e) => {
+  const handleToggleMaximize = async (e) => {
     e.stopPropagation();
     e.preventDefault();
     const appWindow = await getAppWindow();
     if (appWindow) {
       try {
         await appWindow.toggleMaximize();
+        setIsMaximized(prev => !prev);
       } catch (err) {
-        console.error('Maximize failed', err);
+        console.error('Maximize toggle failed', err);
       }
-    } else {
-      console.log('[Browser Fallback] Maximize clicked');
     }
   };
 
@@ -52,12 +51,11 @@ export default function TitleBar({ title = "Data Usage Counter" }) {
     const appWindow = await getAppWindow();
     if (appWindow) {
       try {
-        await appWindow.hide(); // Hide to system tray
+        // Hide to system tray instead of terminating
+        await appWindow.hide();
       } catch (err) {
-        console.error('Close to tray failed', err);
+        console.error('Close failed', err);
       }
-    } else {
-      console.log('[Browser Fallback] Close clicked');
     }
   };
 
@@ -65,106 +63,64 @@ export default function TitleBar({ title = "Data Usage Counter" }) {
     <div
       data-tauri-drag-region
       style={{
-        width: '100%',
-        height: '36px',
-        background: 'rgba(0, 0, 0, 0.25)',
-        borderBottom: '1px solid var(--glass-border-light)',
+        height: '38px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingLeft: '16px',
-        paddingRight: '4px',
+        padding: '0 12px 0 16px',
         userSelect: 'none',
         cursor: 'grab',
-        zIndex: 9999
+        background: 'transparent',
+        borderBottom: '1px solid var(--glass-border-light)'
       }}
     >
-      {/* Title Label (Draggable) */}
-      <span data-tauri-drag-region style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-        {title}
-      </span>
+      {/* Title / App Brand Name */}
+      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
+        <img src="/icon.png" alt="Dolphin Logo" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-muted)' }}>
+          {title}
+        </span>
+      </div>
 
-      {/* Top Right Window Control Buttons (Non-draggable container so clicks fire onClick!) */}
+      {/* Right Fixed Window Controls (Isolated from drag region) */}
       <div
         data-tauri-drag-region="false"
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '2px',
-          height: '100%',
-          zIndex: 10000
+          zIndex: 999999,
+          pointerEvents: 'auto'
         }}
       >
-        {/* Minimize Button */}
         <button
           onClick={handleMinimize}
           onMouseDown={(e) => e.stopPropagation()}
           type="button"
-          style={{
-            width: '42px',
-            height: '28px',
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background 0.2s'
-          }}
           className="titlebar-btn"
-          title="트레이로 최소화"
+          title="최소화"
         >
           <Minus size={14} />
         </button>
 
-        {/* Maximize Button */}
         <button
-          onClick={handleMaximize}
+          onClick={handleToggleMaximize}
           onMouseDown={(e) => e.stopPropagation()}
           type="button"
-          style={{
-            width: '42px',
-            height: '28px',
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background 0.2s'
-          }}
           className="titlebar-btn"
-          title="창 최대화 / 복원"
+          title={isMaximized ? "이전 크기로 복원" : "최대화"}
         >
-          <Square size={12} />
+          {isMaximized ? <Copy size={13} /> : <Square size={13} />}
         </button>
 
-        {/* Close Button */}
         <button
           onClick={handleClose}
           onMouseDown={(e) => e.stopPropagation()}
           type="button"
-          style={{
-            width: '42px',
-            height: '28px',
-            background: 'transparent',
-            border: 'none',
-            color: '#f43f5e',
-            cursor: 'pointer',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background 0.2s'
-          }}
-          className="titlebar-btn-close"
+          className="titlebar-btn close-btn"
           title="트레이로 숨기기"
         >
-          <X size={15} />
+          <X size={14} />
         </button>
       </div>
     </div>

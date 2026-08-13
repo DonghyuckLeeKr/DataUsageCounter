@@ -49,9 +49,20 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
     }
   };
 
+  // Dolphin Mood & Status Indicator
   let statusColor = 'var(--accent-emerald)';
-  if (percentage >= 90) statusColor = 'var(--accent-rose)';
-  else if (percentage >= 80) statusColor = 'var(--accent-amber)';
+  let dolphinMood = '🐬✨ 여유';
+
+  if (percentage >= 90) {
+    statusColor = 'var(--accent-rose)';
+    dolphinMood = '🐬💦 소진 임박!';
+  } else if (percentage >= 80) {
+    statusColor = 'var(--accent-amber)';
+    dolphinMood = '🐬👀 절약 모드';
+  } else if (percentage >= 40) {
+    statusColor = 'var(--accent-blue)';
+    dolphinMood = '🐬🌊 순항 중';
+  }
 
   return (
     <div
@@ -60,10 +71,10 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
         width: '100%',
         height: '100%',
         padding: '12px 14px',
-        borderRadius: '16px',
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
+        borderRadius: '22px 10px 22px 22px', // Dolphin Fin organic asymmetric curve
+        background: 'var(--bg-gradient)',
+        backdropFilter: 'blur(28px)',
+        WebkitBackdropFilter: 'blur(28px)',
         border: '1px solid var(--glass-border)',
         boxShadow: 'var(--shadow-glass)',
         color: 'var(--text-main)',
@@ -73,27 +84,41 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        position: 'relative',
+        overflow: 'hidden'
       }}
     >
       {/* Mini Titlebar & Drag Region */}
       <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{
-            width: '22px',
-            height: '22px',
-            borderRadius: '6px',
+            width: '24px',
+            height: '24px',
+            borderRadius: '8px',
             background: 'rgba(255, 255, 255, 0.08)',
+            border: '1px solid var(--glass-border-light)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none',
             overflow: 'hidden'
           }}>
-            <img src="/icon.png" alt="logo" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+            <img src="/icon.png" alt="logo" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
           </div>
-          <span data-tauri-drag-region style={{ fontSize: '0.75rem', fontWeight: '700', letterSpacing: '-0.2px', color: 'var(--text-main)' }}>
-            DataUsageCounter
+          <span data-tauri-drag-region style={{ fontSize: '0.78rem', fontWeight: '700', letterSpacing: '-0.2px', color: 'var(--text-main)' }}>
+            돌핀 데이터
+          </span>
+          <span style={{
+            fontSize: '0.65rem',
+            fontWeight: '700',
+            padding: '1px 6px',
+            borderRadius: '10px',
+            background: 'rgba(56, 189, 248, 0.15)',
+            color: 'var(--accent-blue)',
+            border: '1px solid rgba(56, 189, 248, 0.3)'
+          }}>
+            {dolphinMood}
           </span>
         </div>
 
@@ -142,8 +167,13 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
       </div>
 
       {/* Real-time Speed Grid */}
-      <div data-tauri-drag-region style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', margin: '6px 0' }}>
-        <div style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '6px 10px', borderRadius: '8px' }}>
+      <div data-tauri-drag-region style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', margin: '4px 0' }}>
+        <div style={{
+          background: 'rgba(56, 189, 248, 0.12)',
+          border: '1px solid rgba(56, 189, 248, 0.25)',
+          padding: '6px 10px',
+          borderRadius: '10px'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-blue)', fontSize: '0.65rem', fontWeight: '700' }}>
             <ArrowDown size={11} />
             <span>다운로드</span>
@@ -153,7 +183,12 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
           </div>
         </div>
 
-        <div style={{ background: 'rgba(167, 139, 250, 0.1)', border: '1px solid rgba(167, 139, 250, 0.2)', padding: '6px 10px', borderRadius: '8px' }}>
+        <div style={{
+          background: 'rgba(167, 139, 250, 0.12)',
+          border: '1px solid rgba(167, 139, 250, 0.25)',
+          padding: '6px 10px',
+          borderRadius: '10px'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-purple)', fontSize: '0.65rem', fontWeight: '700' }}>
             <ArrowUp size={11} />
             <span>업로드</span>
@@ -172,7 +207,7 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
             {totalUsedGB.toFixed(1)} / {limitGB} GB ({percentage.toFixed(0)}%)
           </span>
         </div>
-        <div style={{ height: '5px', background: 'var(--glass-border)', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ height: '5px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{
             width: `${percentage}%`,
             height: '100%',

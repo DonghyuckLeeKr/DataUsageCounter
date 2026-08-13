@@ -46,7 +46,7 @@ export default function Header({
           <div data-tauri-drag-region>
             <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h1 data-tauri-drag-region style={{ fontSize: '1.15rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
-                Data Usage Counter
+                돌핀 데이터 <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>(Dolphin Data)</span>
               </h1>
               <span className="lguplus-badge">{config.carrierName || '모바일 데이터'}</span>
             </div>

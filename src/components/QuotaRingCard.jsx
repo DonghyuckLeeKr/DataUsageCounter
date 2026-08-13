@@ -12,23 +12,31 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
   const daysLeft = getDaysRemainingInMonth(config.resetDay || 1);
   const dailyBudgetGB = calculateDailyBudget(remainingGB, config.resetDay || 1);
 
-  // Status color calculation
+  // Status color & Dolphin Mood calculation
   let statusColor = 'var(--accent-emerald)';
   let statusText = '안전 (Safe)';
   let StatusIcon = ShieldCheck;
+  let dolphinMoodText = '🐬✨ 여유롭게 유영 중';
 
   if (percentage >= 95) {
     statusColor = 'var(--accent-rose)';
     statusText = '95%+ 긴급 위협';
     StatusIcon = AlertOctagon;
-  } else if (percentage >= 90) {
+    dolphinMoodText = '🐬🚨 삐질! 비상 절약!';
+  } else if (percentage >= 85) {
     statusColor = 'var(--accent-rose)';
-    statusText = '90%+ 위험 경고';
+    statusText = '85%+ 위험 경고';
     StatusIcon = AlertTriangle;
-  } else if (percentage >= 80) {
+    dolphinMoodText = '🐬💦 소진 주의보!';
+  } else if (percentage >= 60) {
     statusColor = 'var(--accent-amber)';
-    statusText = '80%+ 주의 구간';
+    statusText = '60%+ 주의 구간';
     StatusIcon = AlertTriangle;
+    dolphinMoodText = '🐬👀 똘망똘망 관찰 중';
+  } else if (percentage >= 30) {
+    statusColor = 'var(--accent-blue)';
+    statusText = '적정 소비';
+    dolphinMoodText = '🐬🌊 시원하게 순항 중';
   }
 
   // Real Moyo Plan Search URLs with configurable affiliate links
@@ -58,8 +66,8 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
       text: '현재 소비량에 딱 맞는 가성비 알뜰폰 비교',
       url: baseAffiliateUrl,
       color: 'var(--brand-color)',
-      bgColor: 'rgba(99, 102, 241, 0.12)',
-      borderColor: 'rgba(99, 102, 241, 0.3)'
+      bgColor: 'rgba(14, 165, 233, 0.12)',
+      borderColor: 'rgba(14, 165, 233, 0.3)'
     };
   }
 
@@ -86,9 +94,22 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
       {/* Card Title Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-main)' }}>
-            월간 데이터 한도 & 일일 가이드
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-main)' }}>
+              월간 데이터 한도 & 일일 가이드
+            </h3>
+            <span style={{
+              fontSize: '0.7rem',
+              fontWeight: '700',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: 'rgba(14, 165, 233, 0.15)',
+              color: 'var(--accent-blue)',
+              border: '1px solid rgba(14, 165, 233, 0.3)'
+            }}>
+              {dolphinMoodText}
+            </span>
+          </div>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             {config.carrierName || '모바일 데이터 요금제'} (월 {limitGB}GB)
           </span>
@@ -138,7 +159,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
               cy="70"
               r={radius}
               fill="none"
-              stroke="var(--glass-border)"
+              stroke="rgba(255, 255, 255, 0.08)"
               strokeWidth="11"
             />
             <circle
@@ -197,7 +218,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
 
           {/* Daily Pacing Box */}
           <div style={{
-            background: 'var(--glass-card)',
+            background: 'rgba(255, 255, 255, 0.04)',
             border: '1px solid var(--glass-border-light)',
             borderRadius: '10px',
             padding: '8px 12px',
