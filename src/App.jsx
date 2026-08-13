@@ -117,6 +117,12 @@ export default function App() {
     handleUpdateConfig({ miniMode: !config.miniMode });
   };
 
+  const handleOpenCalibrationFromMini = () => {
+    // When editing from mini gadget, seamlessly expand to full dashboard and open calibration modal
+    handleUpdateConfig({ miniMode: false });
+    setShowCalibration(true);
+  };
+
   // Render Always-on-top Mini Gadget View if miniMode is active (100% compact window, no blank margins)
   if (config.miniMode) {
     return (
@@ -125,15 +131,8 @@ export default function App() {
           config={config}
           telemetry={telemetry}
           onExpand={handleToggleMiniGadget}
-          onOpenCalibration={() => setShowCalibration(true)}
+          onOpenCalibration={handleOpenCalibrationFromMini}
         />
-        {showCalibration && (
-          <CalibrationModal
-            config={config}
-            onSave={handleUpdateConfig}
-            onClose={() => setShowCalibration(false)}
-          />
-        )}
       </div>
     );
   }
@@ -143,7 +142,7 @@ export default function App() {
     <div className="app-window-container">
       
       {/* Top Fixed TitleBar with Window Controls at Top Right */}
-      <TitleBar title="Data Usage Counter" />
+      <TitleBar title="돌핀 데이터 (Dolphin Data)" />
 
       {/* Scrollable Dashboard Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
