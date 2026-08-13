@@ -16,11 +16,9 @@ export default function Header({
   return (
     <header
       className="glass-panel"
-      data-tauri-drag-region
       style={{
         padding: '12px 18px',
         marginBottom: '14px',
-        cursor: 'grab',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
@@ -28,10 +26,10 @@ export default function Header({
         zIndex: 50
       }}
     >
-      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         
-        {/* Left Branding (Draggable region) */}
-        <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Left Branding */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: '36px',
             height: '36px',
@@ -48,14 +46,14 @@ export default function Header({
             <img src="/icon.png" alt="Dolphin Logo" style={{ width: '30px', height: '30px', objectFit: 'contain' }} />
           </div>
 
-          <div data-tauri-drag-region>
-            <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 data-tauri-drag-region style={{ fontSize: '1.1rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 style={{ fontSize: '1.1rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
                 돌핀 데이터 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>(Dolphin Data)</span>
               </h1>
               <span className="lguplus-badge">{activeProfile?.name || '메인 요금제'}</span>
             </div>
-            <p data-tauri-drag-region style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
               {activeProfile?.selectedInterface || 'ALL 인터페이스'} · 실시간 모니터링 중
             </p>
@@ -63,14 +61,10 @@ export default function Header({
         </div>
 
         {/* Right Action Controls */}
-        <div
-          data-tauri-drag-region="false"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', zIndex: 60 }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', zIndex: 60 }}>
           
           {/* Compact Theme Dropdown Selector */}
           <div
-            data-tauri-drag-region="false"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -83,7 +77,6 @@ export default function Header({
           >
             <Palette size={14} color="var(--brand-color)" />
             <select
-              data-tauri-drag-region="false"
               value={currentTheme}
               onChange={(e) => onSelectTheme(e.target.value)}
               style={{
@@ -94,7 +87,7 @@ export default function Header({
                 fontWeight: '600',
                 outline: 'none',
                 cursor: 'pointer',
-                padding: '4px 0'
+                padding: '5px 0'
               }}
               title="테마 색상 변경"
             >
@@ -107,10 +100,10 @@ export default function Header({
 
           {/* Daily History / Calendar Button */}
           <button
-            data-tauri-drag-region="false"
+            type="button"
             onClick={onOpenDailyHistory}
             className="glass-btn"
-            style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.3)', color: 'var(--accent-blue)' }}
+            style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.3)', color: 'var(--accent-blue)', cursor: 'pointer' }}
             title="일별 소비 캘린더 및 14일 통계 차트 열기"
           >
             <Calendar size={14} />
@@ -119,10 +112,10 @@ export default function Header({
 
           {/* Open Router Admin Page Button */}
           <button
-            data-tauri-drag-region="false"
+            type="button"
             onClick={() => openRouterAdminPage()}
             className="glass-btn"
-            style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)' }}
+            style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)', cursor: 'pointer' }}
             title="LTE 라우터 웹 관리자 페이지(http://192.168.0.1) 열기"
           >
             <Globe size={14} />
@@ -132,10 +125,10 @@ export default function Header({
 
           {/* Mini Floating Widget Toggle */}
           <button
-            data-tauri-drag-region="false"
+            type="button"
             onClick={onToggleMiniGadget}
             className="glass-btn"
-            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+            style={{ padding: '6px 10px', fontSize: '0.78rem', cursor: 'pointer' }}
             title="화면 구석 상시 고정 미니 가젯으로 전환"
           >
             <Monitor size={14} />
@@ -144,10 +137,10 @@ export default function Header({
 
           {/* Settings Button */}
           <button
-            data-tauri-drag-region="false"
+            type="button"
             onClick={onOpenSettings}
             className="glass-btn"
-            style={{ padding: '6px 9px' }}
+            style={{ padding: '6px 9px', cursor: 'pointer' }}
             title="환경 설정 (자동 실행, 일일 한도 경고, 백업 등)"
           >
             <Settings size={14} />
