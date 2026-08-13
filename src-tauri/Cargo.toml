@@ -1,6 +1,6 @@
 [package]
 name = "data-usage-counter"
-version = "1.1.0"
+version = "1.2.0"
 description = "Dolphin Data - Real-time Network & LTE Data Monitor"
 authors = ["Antigravity"]
 edition = "2021"

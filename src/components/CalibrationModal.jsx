@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { X, Check, Edit3, HelpCircle, RefreshCw, Radio, Sparkles } from 'lucide-react';
+import { X, Check, Edit3, RefreshCw, Radio, Sparkles } from 'lucide-react';
 import { detectLteRouterCarrier } from '../services/routerDetectionService';
 
-export default function CalibrationModal({ config, onSave, onClose }) {
-  const [carrierInput, setCarrierInput] = useState(config.carrierName || '모바일 데이터 요금제');
+export default function CalibrationModal({ profile, onSave, onClose }) {
+  const [carrierInput, setCarrierInput] = useState(profile.carrierName || profile.name || '모바일 데이터 요금제');
   const [baselineInput, setBaselineInput] = useState(
-    config.initialBaselineGB !== undefined ? String(config.initialBaselineGB) : '0'
+    profile.initialBaselineGB !== undefined ? String(profile.initialBaselineGB) : '0'
   );
   const [limitInput, setLimitInput] = useState(
-    config.monthlyLimitGB !== undefined ? String(config.monthlyLimitGB) : '100'
+    profile.monthlyLimitGB !== undefined ? String(profile.monthlyLimitGB) : '100'
   );
   const [resetDayInput, setResetDayInput] = useState(
-    config.resetDay !== undefined ? String(config.resetDay) : '1'
+    profile.resetDay !== undefined ? String(profile.resetDay) : '1'
   );
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
@@ -35,6 +35,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
     const parsedResetDay = parseInt(resetDayInput, 10) || 1;
 
     onSave({
+      name: carrierInput.trim() || profile.name,
       carrierName: carrierInput.trim() || '데이터 요금제',
       initialBaselineGB: Math.max(0, parsedBaseline),
       monthlyLimitGB: Math.max(1, parsedLimit),
@@ -45,7 +46,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
   };
 
   const handleQuickZeroReset = () => {
-    if (window.confirm('정말로 사용량을 0 GB로 완전히 초기화하시겠습니까?')) {
+    if (window.confirm('정말로 이 프로필의 사용량을 0 GB로 완전히 초기화하시겠습니까?')) {
       setBaselineInput('0');
       onSave({
         initialBaselineGB: 0,
@@ -104,7 +105,9 @@ export default function CalibrationModal({ config, onSave, onClose }) {
             <Edit3 size={20} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-main)' }}>통신사 사용량 보정 & USIM 감지</h2>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-main)' }}>
+              '{profile.name || '요금제'}' 사용량 보정 & USIM 감지
+            </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               통신사 이름, 월간 한도, 현재 사용량을 직접 설정합니다.
             </p>
@@ -139,7 +142,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)' }}>
-                통신사 / 요금제 이름
+                요금제 / 회선 이름
               </label>
 
               <button
@@ -164,7 +167,7 @@ export default function CalibrationModal({ config, onSave, onClose }) {
               value={carrierInput}
               onChange={(e) => setCarrierInput(e.target.value)}
               className="glass-input"
-              placeholder="예: 데이터 함께쓰기, LTE/5G 무제한, 100GB 등"
+              placeholder="예: 스마트폰 테더링 20GB, LTE 라우터 80GB 등"
               required
             />
           </div>

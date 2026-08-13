@@ -1,9 +1,10 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, Clock, Wifi, Zap } from 'lucide-react';
+import { ArrowDown, ArrowUp, Clock, Wifi } from 'lucide-react';
 import { formatBytes, getDaysRemainingInMonth } from '../utils/formatters';
 
-export default function QuickStatsStrip({ telemetry, config }) {
-  const daysLeft = getDaysRemainingInMonth(config.resetDay || 1);
+export default function QuickStatsStrip({ telemetry, config, activeProfile }) {
+  const profile = activeProfile || config || {};
+  const daysLeft = getDaysRemainingInMonth(profile.resetDay || 1);
   const totalDownBytes = telemetry.totalRx || 0;
   const totalUpBytes = telemetry.totalTx || 0;
 
@@ -12,7 +13,7 @@ export default function QuickStatsStrip({ telemetry, config }) {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
       gap: '14px',
-      marginBottom: '20px'
+      marginBottom: '18px'
     }}>
       {/* Stat 1: Today Downloaded */}
       <div className="glass-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -26,7 +27,7 @@ export default function QuickStatsStrip({ telemetry, config }) {
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--accent-blue)',
-          shrink: 0
+          flexShrink: 0
         }}>
           <ArrowDown size={18} />
         </div>
@@ -50,7 +51,7 @@ export default function QuickStatsStrip({ telemetry, config }) {
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--accent-purple)',
-          shrink: 0
+          flexShrink: 0
         }}>
           <ArrowUp size={18} />
         </div>
@@ -74,7 +75,7 @@ export default function QuickStatsStrip({ telemetry, config }) {
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--accent-emerald)',
-          shrink: 0
+          flexShrink: 0
         }}>
           <Clock size={18} />
         </div>
@@ -98,14 +99,14 @@ export default function QuickStatsStrip({ telemetry, config }) {
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--brand-color)',
-          shrink: 0
+          flexShrink: 0
         }}>
           <Wifi size={18} />
         </div>
-        <div>
+        <div style={{ overflow: 'hidden' }}>
           <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>연결된 어댑터</span>
-          <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '130px', display: 'block' }}>
-            LTE 라우터 USB
+          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', display: 'block' }}>
+            {profile.selectedInterface || '전체 인터페이스'}
           </span>
         </div>
       </div>

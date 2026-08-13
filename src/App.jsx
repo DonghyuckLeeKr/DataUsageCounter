@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { loadConfig, saveConfig, calculateTotalUsedGB } from './services/storageService';
-import { fetchRealtimeStats, isTauriAvailable, fetchNetworkInterfaces, setWindowMiniMode } from './services/networkTelemetry';
+import {
+  loadConfig,
+  saveConfig,
+  getActiveProfile,
+  calculateTotalUsedGB
+} from './services/storageService';
+import {
+  fetchRealtimeStats,
+  isTauriAvailable,
+  fetchNetworkInterfaces,
+  setWindowMiniMode
+} from './services/networkTelemetry';
 import { checkAndNotifyThresholds } from './services/notificationService';
 import Header from './components/Header';
+import ProfileTabBar from './components/ProfileTabBar';
 import QuickStatsStrip from './components/QuickStatsStrip';
 import QuotaRingCard from './components/QuotaRingCard';
 import TrafficTimeSeriesChart from './components/TrafficTimeSeriesChart';
@@ -26,6 +37,8 @@ export default function App() {
   const [historyData, setHistoryData] = useState([]);
   const [showCalibration, setShowCalibration] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  const activeProfile = getActiveProfile(config);
 
   // Sync theme attribute to document root element
   useEffect(() => {
@@ -66,25 +79,33 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const stats = await fetchRealtimeStats(config.selectedInterface);
+        const currentProfile = getActiveProfile(config);
+        const stats = await fetchRealtimeStats(currentProfile.selectedInterface || 'ALL (전체 인터페이스)');
         if (stats) {
           setTelemetry(stats);
 
-          // Accumulate bytes into config sessionBytes
+          // Accumulate bytes into the active profile's sessionBytes
           const addedBytes = (stats.downloadSpeed || 0) + (stats.uploadSpeed || 0);
           if (addedBytes > 0) {
             setConfig(prev => {
-              const updated = {
-                ...prev,
-                sessionBytes: (prev.sessionBytes || 0) + addedBytes
-              };
-              saveConfig(updated);
-              
-              // Check for threshold OS Push Notifications
-              const totalGB = calculateTotalUsedGB(updated);
-              checkAndNotifyThresholds(totalGB, updated.monthlyLimitGB || 100, updated.carrierName);
+              const activeId = prev.activeProfileId;
+              const updatedProfiles = (prev.profiles || []).map(p => {
+                if (p.id === activeId) {
+                  const updatedP = {
+                    ...p,
+                    sessionBytes: (p.sessionBytes || 0) + addedBytes
+                  };
+                  // Check threshold push notification for this profile
+                  const totalGB = calculateTotalUsedGB(updatedP);
+                  checkAndNotifyThresholds(totalGB, updatedP.monthlyLimitGB || 100, updatedP.name);
+                  return updatedP;
+                }
+                return p;
+              });
 
-              return updated;
+              const updatedConfig = { ...prev, profiles: updatedProfiles };
+              saveConfig(updatedConfig);
+              return updatedConfig;
             });
           }
 
@@ -101,12 +122,39 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [config.selectedInterface, config.monthlyLimitGB, config.carrierName]);
+  }, [config.activeProfileId, activeProfile.selectedInterface, activeProfile.monthlyLimitGB]);
 
   const handleUpdateConfig = (newPartial) => {
     const updated = { ...config, ...newPartial };
     setConfig(updated);
     saveConfig(updated);
+  };
+
+  const handleUpdateActiveProfile = (profilePartial) => {
+    const updatedProfiles = (config.profiles || []).map(p => {
+      if (p.id === config.activeProfileId) {
+        return { ...p, ...profilePartial };
+      }
+      return p;
+    });
+    handleUpdateConfig({ profiles: updatedProfiles });
+  };
+
+  const handleSwitchProfile = (profileId) => {
+    handleUpdateConfig({ activeProfileId: profileId });
+  };
+
+  const handleAddProfile = (newProfile) => {
+    if ((config.profiles || []).length >= 5) return;
+    const updatedProfiles = [...(config.profiles || []), newProfile];
+    handleUpdateConfig({ profiles: updatedProfiles, activeProfileId: newProfile.id });
+  };
+
+  const handleDeleteProfile = (profileId) => {
+    const remaining = (config.profiles || []).filter(p => p.id !== profileId);
+    if (remaining.length === 0) return;
+    const nextActiveId = config.activeProfileId === profileId ? remaining[0].id : config.activeProfileId;
+    handleUpdateConfig({ profiles: remaining, activeProfileId: nextActiveId });
   };
 
   const handleSelectTheme = (themeName) => {
@@ -118,12 +166,11 @@ export default function App() {
   };
 
   const handleOpenCalibrationFromMini = () => {
-    // When editing from mini gadget, seamlessly expand to full dashboard and open calibration modal
     handleUpdateConfig({ miniMode: false });
     setShowCalibration(true);
   };
 
-  // Render Always-on-top Mini Gadget View if miniMode is active (100% compact window, no blank margins)
+  // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
     return (
       <div style={{ width: '100vw', height: '100vh', background: 'transparent', overflow: 'hidden', padding: 0, margin: 0 }}>
@@ -145,11 +192,12 @@ export default function App() {
       <TitleBar title="돌핀 데이터 (Dolphin Data)" />
 
       {/* Scrollable Dashboard Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
         
         {/* Top Header */}
         <Header
           config={config}
+          activeProfile={activeProfile}
           onOpenCalibration={() => setShowCalibration(true)}
           onOpenSettings={() => setShowSettings(true)}
           onToggleMiniGadget={handleToggleMiniGadget}
@@ -157,10 +205,20 @@ export default function App() {
           telemetry={telemetry}
         />
 
+        {/* Multi-Profile Tab Switcher Bar (Up to 5 profiles) */}
+        <ProfileTabBar
+          config={config}
+          onSwitchProfile={handleSwitchProfile}
+          onAddProfile={handleAddProfile}
+          onDeleteProfile={handleDeleteProfile}
+          onOpenCalibration={() => setShowCalibration(true)}
+        />
+
         {/* Top Quick Stats Bar */}
         <QuickStatsStrip
           telemetry={telemetry}
           config={config}
+          activeProfile={activeProfile}
         />
 
         {/* 2-Column Responsive Dashboard Layout */}
@@ -174,6 +232,7 @@ export default function App() {
           {/* Left Column: Data Quota & Rolling Traffic Graph */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <QuotaRingCard
+              profile={activeProfile}
               config={config}
               onOpenCalibration={() => setShowCalibration(true)}
             />
@@ -191,7 +250,7 @@ export default function App() {
             />
             <PingTestCard />
             <AppBreakdownCard
-              sessionBytes={config.sessionBytes || 0}
+              sessionBytes={activeProfile.sessionBytes || 0}
             />
           </div>
 
@@ -202,8 +261,8 @@ export default function App() {
       {/* Modals */}
       {showCalibration && (
         <CalibrationModal
-          config={config}
-          onSave={handleUpdateConfig}
+          profile={activeProfile}
+          onSave={handleUpdateActiveProfile}
           onClose={() => setShowCalibration(false)}
         />
       )}
@@ -211,7 +270,9 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           config={config}
+          activeProfile={activeProfile}
           onSave={handleUpdateConfig}
+          onSaveProfile={handleUpdateActiveProfile}
           onClose={() => setShowSettings(false)}
         />
       )}

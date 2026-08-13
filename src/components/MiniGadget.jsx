@@ -1,11 +1,12 @@
 import React from 'react';
 import { ArrowDown, ArrowUp, Maximize2, Edit3, X, Minus } from 'lucide-react';
-import { calculateTotalUsedGB } from '../services/storageService';
+import { calculateTotalUsedGB, getActiveProfile } from '../services/storageService';
 import { formatSpeed } from '../utils/formatters';
 
 export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibration }) {
-  const totalUsedGB = calculateTotalUsedGB(config);
-  const limitGB = config.monthlyLimitGB || 100;
+  const activeProfile = getActiveProfile(config);
+  const totalUsedGB = calculateTotalUsedGB(activeProfile);
+  const limitGB = activeProfile.monthlyLimitGB || 100;
   const remainingGB = Math.max(0, limitGB - totalUsedGB);
   const percentage = Math.min(100, Math.max(0, (totalUsedGB / limitGB) * 100));
 
@@ -49,19 +50,19 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
     }
   };
 
-  // Dolphin Mood & Status Indicator
+  // Status & State Indicator
   let statusColor = 'var(--accent-emerald)';
-  let dolphinMood = '🐬✨ 여유';
+  let levelText = '사용량 여유';
 
   if (percentage >= 90) {
     statusColor = 'var(--accent-rose)';
-    dolphinMood = '🐬💦 소진 임박!';
+    levelText = '소진 임박';
   } else if (percentage >= 80) {
     statusColor = 'var(--accent-amber)';
-    dolphinMood = '🐬👀 절약 모드';
+    levelText = '절약 모드';
   } else if (percentage >= 40) {
     statusColor = 'var(--accent-blue)';
-    dolphinMood = '🐬🌊 순항 중';
+    levelText = '순항 중';
   }
 
   return (
@@ -118,7 +119,7 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
             color: 'var(--accent-blue)',
             border: '1px solid rgba(56, 189, 248, 0.3)'
           }}>
-            {dolphinMood}
+            {levelText}
           </span>
         </div>
 
@@ -202,7 +203,7 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
       {/* Quota Bar */}
       <div data-tauri-drag-region>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '3px' }}>
-          <span style={{ color: 'var(--text-muted)' }}>{config.carrierName || '월간 한도'}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{activeProfile.name || '월간 한도'}</span>
           <span style={{ fontWeight: '700', color: statusColor }}>
             {totalUsedGB.toFixed(1)} / {limitGB} GB ({percentage.toFixed(0)}%)
           </span>

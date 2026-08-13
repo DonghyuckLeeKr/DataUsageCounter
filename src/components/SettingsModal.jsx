@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Settings, Download } from 'lucide-react';
 import { fetchNetworkInterfaces } from '../services/networkTelemetry';
 
-export default function SettingsModal({ config, onSave, onClose }) {
+export default function SettingsModal({ config, activeProfile, onSave, onSaveProfile, onClose }) {
   const [interfaces, setInterfaces] = useState([]);
-  const [selectedIf, setSelectedIf] = useState(config.selectedInterface || 'ALL (전체 인터페이스)');
+  const [selectedIf, setSelectedIf] = useState(
+    activeProfile?.selectedInterface || config.selectedInterface || 'ALL (전체 인터페이스)'
+  );
   const [unitMode, setUnitMode] = useState(config.unitMode || 'MBs');
 
   useEffect(() => {
@@ -13,21 +15,21 @@ export default function SettingsModal({ config, onSave, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({
-      selectedInterface: selectedIf,
-      unitMode
-    });
+    if (onSaveProfile) {
+      onSaveProfile({ selectedInterface: selectedIf });
+    }
+    onSave({ unitMode });
     onClose();
   };
 
   const handleExportCSV = () => {
     const csvContent = "data:text/csv;charset=utf-8," 
-      + "Date,Carrier,BaselineGB,TotalUsedGB,LimitGB\n"
-      + `${new Date().toISOString()},${config.carrierName},${config.initialBaselineGB},${(config.initialBaselineGB + (config.sessionBytes/(1024*1024*1024))).toFixed(2)},${config.monthlyLimitGB}`;
+      + "Date,ProfileName,Carrier,BaselineGB,TotalUsedGB,LimitGB\n"
+      + `${new Date().toISOString()},${activeProfile.name},${activeProfile.carrierName},${activeProfile.initialBaselineGB},${(activeProfile.initialBaselineGB + (activeProfile.sessionBytes/(1024*1024*1024))).toFixed(2)},${activeProfile.monthlyLimitGB}`;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `data_usage_log_${new Date().toISOString().slice(0,10)}.csv`);
+    link.setAttribute("download", `dolphindata_log_${new Date().toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -82,7 +84,7 @@ export default function SettingsModal({ config, onSave, onClose }) {
           <div>
             <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-main)' }}>환경 설정 & 어댑터 지정</h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              USB LTE 라우터 인터페이스 선택 및 속도를 설정합니다.
+              현재 선택된 '{activeProfile.name}'에 연결할 네트워크 어댑터 및 단위를 설정합니다.
             </p>
           </div>
         </div>
@@ -92,7 +94,7 @@ export default function SettingsModal({ config, onSave, onClose }) {
           {/* Network Interface Selection */}
           <div>
             <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              모니터링할 네트워크 어댑터 (인터페이스)
+              '{activeProfile.name}'에 지정할 네트워크 어댑터
             </label>
             <select
               value={selectedIf}
@@ -105,7 +107,7 @@ export default function SettingsModal({ config, onSave, onClose }) {
               ))}
             </select>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              USB LTE 라우터로 연결된 RNDIS 또는 NDIS 어댑터를 선택하세요.
+              스마트폰 핫스팟은 Wi-Fi, 휴대용 라우터는 RNDIS/NDIS/이더넷을 선택하세요.
             </span>
           </div>
 

@@ -3,47 +3,48 @@ import { ShieldCheck, AlertTriangle, AlertOctagon, Edit3, ExternalLink } from 'l
 import { calculateTotalUsedGB } from '../services/storageService';
 import { getDaysRemainingInMonth, calculateDailyBudget } from '../utils/formatters';
 
-export default function QuotaRingCard({ config, onOpenCalibration }) {
-  const totalUsedGB = calculateTotalUsedGB(config);
-  const limitGB = config.monthlyLimitGB || 100;
+export default function QuotaRingCard({ profile, config, onOpenCalibration }) {
+  const target = profile || config || {};
+  const totalUsedGB = calculateTotalUsedGB(target);
+  const limitGB = target.monthlyLimitGB || 100;
   const remainingGB = Math.max(0, limitGB - totalUsedGB);
   const percentage = Math.min(100, Math.max(0, (totalUsedGB / limitGB) * 100));
 
-  const daysLeft = getDaysRemainingInMonth(config.resetDay || 1);
-  const dailyBudgetGB = calculateDailyBudget(remainingGB, config.resetDay || 1);
+  const daysLeft = getDaysRemainingInMonth(target.resetDay || 1);
+  const dailyBudgetGB = calculateDailyBudget(remainingGB, target.resetDay || 1);
 
-  // Status color & Dolphin Mood calculation
+  // Status color & Level indicator calculation
   let statusColor = 'var(--accent-emerald)';
   let statusText = '안전 (Safe)';
   let StatusIcon = ShieldCheck;
-  let dolphinMoodText = '🐬✨ 여유롭게 유영 중';
+  let levelText = '사용량 여유';
 
   if (percentage >= 95) {
     statusColor = 'var(--accent-rose)';
     statusText = '95%+ 긴급 위협';
     StatusIcon = AlertOctagon;
-    dolphinMoodText = '🐬🚨 삐질! 비상 절약!';
+    levelText = '비상 절약';
   } else if (percentage >= 85) {
     statusColor = 'var(--accent-rose)';
     statusText = '85%+ 위험 경고';
     StatusIcon = AlertTriangle;
-    dolphinMoodText = '🐬💦 소진 주의보!';
+    levelText = '소진 주의보';
   } else if (percentage >= 60) {
     statusColor = 'var(--accent-amber)';
     statusText = '60%+ 주의 구간';
     StatusIcon = AlertTriangle;
-    dolphinMoodText = '🐬👀 똘망똘망 관찰 중';
+    levelText = '적정 소비';
   } else if (percentage >= 30) {
     statusColor = 'var(--accent-blue)';
-    statusText = '적정 소비';
-    dolphinMoodText = '🐬🌊 시원하게 순항 중';
+    statusText = '안전 구간';
+    levelText = '순항 중';
   }
 
   // Real Moyo Plan Search URLs with configurable affiliate links
-  const baseAffiliateUrl = config.affiliateUrl || 'https://www.moyoplan.com/plans';
+  const baseAffiliateUrl = target.affiliateUrl || 'https://www.moyoplan.com/plans';
 
   let shortMatch = {
-    badge: '💡 연 36만 원 절감',
+    badge: '연 36만 원 절감',
     text: '데이터가 많이 남네요! 월 12,900원 알뜰폰 요금제 비교',
     url: `${baseAffiliateUrl}?sort=price_asc`,
     color: 'var(--accent-emerald)',
@@ -53,7 +54,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
 
   if (percentage >= 85) {
     shortMatch = {
-      badge: '🚨 초과 요금 방지',
+      badge: '초과 요금 방지',
       text: '소진 위험! 월 19,800원 무제한 요금제 특가',
       url: `${baseAffiliateUrl}?data=unlimited`,
       color: 'var(--accent-rose)',
@@ -62,7 +63,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
     };
   } else if (percentage >= 40 && percentage < 85) {
     shortMatch = {
-      badge: '✨ 맞춤 요금제',
+      badge: '맞춤 요금제',
       text: '현재 소비량에 딱 맞는 가성비 알뜰폰 비교',
       url: baseAffiliateUrl,
       color: 'var(--brand-color)',
@@ -107,11 +108,11 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
               color: 'var(--accent-blue)',
               border: '1px solid rgba(14, 165, 233, 0.3)'
             }}>
-              {dolphinMoodText}
+              {levelText}
             </span>
           </div>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {config.carrierName || '모바일 데이터 요금제'} (월 {limitGB}GB)
+            {target.name || target.carrierName || '모바일 데이터 요금제'} (월 {limitGB}GB)
           </span>
         </div>
 
@@ -141,7 +142,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
               cursor: 'pointer',
               padding: '4px'
             }}
-            title="통신사/요금제 수정 및 사용량 보정"
+            title="이 요금제 정보 및 사용량 보정"
           >
             <Edit3 size={16} />
           </button>
@@ -237,7 +238,7 @@ export default function QuotaRingCard({ config, onOpenCalibration }) {
 
             <div style={{ textAlign: 'right', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
               <div>이번 달 <b>{daysLeft}일</b> 남음</div>
-              <div>매월 <b>{config.resetDay || 1}일</b> 리셋</div>
+              <div>매월 <b>{target.resetDay || 1}일</b> 리셋</div>
             </div>
           </div>
 
