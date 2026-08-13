@@ -1,14 +1,25 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" style="background: transparent !important; background-color: transparent !important;">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>돌핀 데이터 (Dolphin Data) - 실시간 네트워크 & 데이터 모니터</title>
     <meta name="description" content="돌핀 데이터 (Dolphin Data) - 실시간 데이터 사용량 및 네트워크 트래픽 모니터링 데스크톱 프로그램" />
+    <style>
+      html, body, #root {
+        background: transparent !important;
+        background-color: transparent !important;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="background: transparent !important; background-color: transparent !important;">
+    <div id="root" style="background: transparent !important; background-color: transparent !important; width: 100%; height: 100%;"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

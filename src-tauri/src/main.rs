@@ -62,6 +62,37 @@ fn kill_process(target_pid: u32, state: State<AppState>) -> bool {
 }
 
 #[tauri::command]
+fn update_tray_tooltip(tooltip: String, app_handle: tauri::AppHandle) {
+    let _ = app_handle.tray_handle().set_tooltip(&tooltip);
+}
+
+#[tauri::command]
+fn set_auto_start(enable: bool) -> bool {
+    if let Ok(exe_path) = std::env::current_exe() {
+        let exe_str = exe_path.to_string_lossy().to_string();
+        if enable {
+            let cmd = format!("reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v DolphinData /t REG_SZ /d \"\\\"{}\\\"\" /f", exe_str);
+            let _ = std::process::Command::new("cmd").args(&["/C", &cmd]).output();
+            return true;
+        } else {
+            let cmd = "reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v DolphinData /f";
+            let _ = std::process::Command::new("cmd").args(&["/C", cmd]).output();
+            return false;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+fn get_auto_start() -> bool {
+    let cmd = "reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v DolphinData";
+    if let Ok(output) = std::process::Command::new("cmd").args(&["/C", cmd]).output() {
+        return output.status.success();
+    }
+    false
+}
+
+#[tauri::command]
 fn set_mini_mode(mini: bool, window: tauri::Window) {
     if mini {
         let _ = window.set_resizable(true);
@@ -129,7 +160,6 @@ fn get_realtime_stats(target_interface: String, state: State<AppState>) -> Telem
     let mut interfaces_info = Vec::new();
 
     for (name, network) in nets.iter() {
-        // In sysinfo 0.30, .received() and .transmitted() represent delta bytes between refresh() calls (speed)
         let rx_speed = network.received();
         let tx_speed = network.transmitted();
         let tot_rx = network.total_received();
@@ -180,7 +210,9 @@ fn main() {
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(quit);
 
-    let system_tray = SystemTray::new().with_menu(tray_menu);
+    let system_tray = SystemTray::new()
+        .with_menu(tray_menu)
+        .with_tooltip("돌핀 데이터 (Dolphin Data) - 실시간 데이터 모니터");
 
     tauri::Builder::default()
         .manage(state)
@@ -237,7 +269,10 @@ fn main() {
             get_realtime_stats,
             get_top_processes,
             kill_process,
-            set_mini_mode
+            set_mini_mode,
+            update_tray_tooltip,
+            set_auto_start,
+            get_auto_start
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

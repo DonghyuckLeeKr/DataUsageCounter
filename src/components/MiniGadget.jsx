@@ -73,9 +73,8 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
         height: '100%',
         padding: '12px 14px',
         borderRadius: '22px 10px 22px 22px', // Dolphin Fin organic asymmetric curve
+        clipPath: 'inset(0 round 22px 10px 22px 22px)', // Pure alpha transparent outside corners
         background: 'var(--bg-gradient)',
-        backdropFilter: 'blur(28px)',
-        WebkitBackdropFilter: 'blur(28px)',
         border: '1px solid var(--glass-border)',
         boxShadow: 'var(--shadow-glass)',
         color: 'var(--text-main)',

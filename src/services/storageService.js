@@ -1,4 +1,4 @@
-// Storage service with multi-profile (up to 5 plans) support and monthly auto-reset
+// Storage service with multi-profile, cumulative process tracking, and daily history
 
 const STORAGE_KEY = 'data_usage_counter_v1_config';
 
@@ -15,23 +15,33 @@ export const DEFAULT_PROFILE = {
   icon: '📱'
 };
 
+export const getTodayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+export const getCurrentPeriod = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const DEFAULT_CONFIG = {
   activeProfileId: 'profile-1',
   profiles: [DEFAULT_PROFILE],
   unitMode: 'MBs',      // 'MBs' or 'Mbps'
   theme: 'soft-dark',   // 'soft-dark', 'midnight-black', 'nordic-light', 'neon-cyber'
   miniMode: false,
+  autoStart: false,
+  dailySurgeLimitGB: 5, // Daily limit in GB (surge alert trigger)
+  dailyHistory: {},     // { '2026-08-13': 1.45, '2026-08-12': 2.30 } in GB
+  processCumulative: {}, // { 'chrome.exe': { bytes: 4200000000, domain: 'Google', lastSeen: '...' } }
   alerts: {
     t80: true,
     t90: true,
     t95: true,
+    dailySurge: true
   },
   lastUpdated: new Date().toISOString()
-};
-
-export const getCurrentPeriod = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
 export const loadConfig = () => {
@@ -116,4 +126,9 @@ export const calculateTotalUsedGB = (profileOrConfig) => {
   const baseline = parseFloat(profile.initialBaselineGB) || 0;
   const sessionGB = (profile.sessionBytes || 0) / (1024 * 1024 * 1024);
   return baseline + sessionGB;
+};
+
+export const getTodayUsedGB = (config) => {
+  const todayKey = getTodayKey();
+  return config?.dailyHistory?.[todayKey] || 0;
 };

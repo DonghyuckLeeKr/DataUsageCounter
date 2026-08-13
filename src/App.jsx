@@ -3,15 +3,19 @@ import {
   loadConfig,
   saveConfig,
   getActiveProfile,
-  calculateTotalUsedGB
+  calculateTotalUsedGB,
+  getTodayKey,
+  getTodayUsedGB
 } from './services/storageService';
 import {
   fetchRealtimeStats,
   isTauriAvailable,
   fetchNetworkInterfaces,
-  setWindowMiniMode
+  setWindowMiniMode,
+  updateTrayTooltip
 } from './services/networkTelemetry';
-import { checkAndNotifyThresholds } from './services/notificationService';
+import { checkAndNotifyThresholds, checkAndNotifyDailySurge } from './services/notificationService';
+import { formatSpeed } from './utils/formatters';
 import Header from './components/Header';
 import ProfileTabBar from './components/ProfileTabBar';
 import QuickStatsStrip from './components/QuickStatsStrip';
@@ -24,6 +28,7 @@ import MiniGadget from './components/MiniGadget';
 import TitleBar from './components/TitleBar';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
+import DailyHistoryModal from './components/DailyHistoryModal';
 
 export default function App() {
   const [config, setConfig] = useState(loadConfig());
@@ -37,6 +42,7 @@ export default function App() {
   const [historyData, setHistoryData] = useState([]);
   const [showCalibration, setShowCalibration] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDailyHistory, setShowDailyHistory] = useState(false);
 
   const activeProfile = getActiveProfile(config);
 
@@ -84,26 +90,55 @@ export default function App() {
         if (stats) {
           setTelemetry(stats);
 
-          // Accumulate bytes into the active profile's sessionBytes
+          // Update System Tray hover tooltip with real-time usage & speed
+          const totalGB = calculateTotalUsedGB(currentProfile);
+          const limitGB = currentProfile.monthlyLimitGB || 100;
+          const pct = ((totalGB / limitGB) * 100).toFixed(1);
+          const downStr = formatSpeed(stats.downloadSpeed || 0, config.unitMode);
+          const upStr = formatSpeed(stats.uploadSpeed || 0, config.unitMode);
+          const trayTooltipText = `돌핀 데이터 [${currentProfile.name || '메인 요금제'}]\n사용량: ${totalGB.toFixed(2)} / ${limitGB} GB (${pct}%)\n실시간: ↓ ${downStr} | ↑ ${upStr}`;
+          updateTrayTooltip(trayTooltipText);
+
+          // Accumulate bytes into the active profile's sessionBytes and dailyHistory
           const addedBytes = (stats.downloadSpeed || 0) + (stats.uploadSpeed || 0);
           if (addedBytes > 0) {
             setConfig(prev => {
               const activeId = prev.activeProfileId;
+              let targetProfileName = '요금제';
+
               const updatedProfiles = (prev.profiles || []).map(p => {
                 if (p.id === activeId) {
+                  targetProfileName = p.name;
                   const updatedP = {
                     ...p,
                     sessionBytes: (p.sessionBytes || 0) + addedBytes
                   };
                   // Check threshold push notification for this profile
-                  const totalGB = calculateTotalUsedGB(updatedP);
-                  checkAndNotifyThresholds(totalGB, updatedP.monthlyLimitGB || 100, updatedP.name);
+                  const profileTotalGB = calculateTotalUsedGB(updatedP);
+                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name);
                   return updatedP;
                 }
                 return p;
               });
 
-              const updatedConfig = { ...prev, profiles: updatedProfiles };
+              // Accumulate into dailyHistory
+              const todayKey = getTodayKey();
+              const updatedDaily = { ...(prev.dailyHistory || {}) };
+              const addedGB = addedBytes / (1024 * 1024 * 1024);
+              const prevTodayGB = parseFloat(updatedDaily[todayKey]) || 0;
+              const newTodayGB = prevTodayGB + addedGB;
+              updatedDaily[todayKey] = parseFloat(newTodayGB.toFixed(4));
+
+              // Check daily surge limit notification
+              if (prev.alerts?.dailySurge !== false) {
+                checkAndNotifyDailySurge(newTodayGB, prev.dailySurgeLimitGB || 5, targetProfileName);
+              }
+
+              const updatedConfig = {
+                ...prev,
+                profiles: updatedProfiles,
+                dailyHistory: updatedDaily
+              };
               saveConfig(updatedConfig);
               return updatedConfig;
             });
@@ -122,22 +157,53 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [config.activeProfileId, activeProfile.selectedInterface, activeProfile.monthlyLimitGB]);
+  }, [config.activeProfileId, activeProfile.selectedInterface, activeProfile.monthlyLimitGB, config.unitMode]);
 
   const handleUpdateConfig = (newPartial) => {
-    const updated = { ...config, ...newPartial };
-    setConfig(updated);
-    saveConfig(updated);
+    setConfig(prev => {
+      const updated = typeof newPartial === 'function' ? newPartial(prev) : { ...prev, ...newPartial };
+      saveConfig(updated);
+      return updated;
+    });
+  };
+
+  const handleAccumulateProcesses = (list) => {
+    setConfig(prev => {
+      const updatedCumul = { ...(prev.processCumulative || {}) };
+      let changed = false;
+
+      list.forEach(p => {
+        const added = (p.downloadSpeed || 0) * 2;
+        if (added > 0) {
+          changed = true;
+          const pPrev = updatedCumul[p.name] || { bytes: 0, domain: p.targetDomain, lastSeen: '' };
+          updatedCumul[p.name] = {
+            bytes: (pPrev.bytes || 0) + added,
+            domain: p.targetDomain || pPrev.domain,
+            lastSeen: new Date().toISOString()
+          };
+        }
+      });
+
+      if (!changed) return prev;
+      const updated = { ...prev, processCumulative: updatedCumul };
+      saveConfig(updated);
+      return updated;
+    });
   };
 
   const handleUpdateActiveProfile = (profilePartial) => {
-    const updatedProfiles = (config.profiles || []).map(p => {
-      if (p.id === config.activeProfileId) {
-        return { ...p, ...profilePartial };
-      }
-      return p;
+    setConfig(prev => {
+      const updatedProfiles = (prev.profiles || []).map(p => {
+        if (p.id === prev.activeProfileId) {
+          return { ...p, ...profilePartial };
+        }
+        return p;
+      });
+      const updated = { ...prev, profiles: updatedProfiles };
+      saveConfig(updated);
+      return updated;
     });
-    handleUpdateConfig({ profiles: updatedProfiles });
   };
 
   const handleSwitchProfile = (profileId) => {
@@ -145,16 +211,24 @@ export default function App() {
   };
 
   const handleAddProfile = (newProfile) => {
-    if ((config.profiles || []).length >= 5) return;
-    const updatedProfiles = [...(config.profiles || []), newProfile];
-    handleUpdateConfig({ profiles: updatedProfiles, activeProfileId: newProfile.id });
+    setConfig(prev => {
+      if ((prev.profiles || []).length >= 5) return prev;
+      const updatedProfiles = [...(prev.profiles || []), newProfile];
+      const updated = { ...prev, profiles: updatedProfiles, activeProfileId: newProfile.id };
+      saveConfig(updated);
+      return updated;
+    });
   };
 
   const handleDeleteProfile = (profileId) => {
-    const remaining = (config.profiles || []).filter(p => p.id !== profileId);
-    if (remaining.length === 0) return;
-    const nextActiveId = config.activeProfileId === profileId ? remaining[0].id : config.activeProfileId;
-    handleUpdateConfig({ profiles: remaining, activeProfileId: nextActiveId });
+    setConfig(prev => {
+      const remaining = (prev.profiles || []).filter(p => p.id !== profileId);
+      if (remaining.length === 0) return prev;
+      const nextActiveId = prev.activeProfileId === profileId ? remaining[0].id : prev.activeProfileId;
+      const updated = { ...prev, profiles: remaining, activeProfileId: nextActiveId };
+      saveConfig(updated);
+      return updated;
+    });
   };
 
   const handleSelectTheme = (themeName) => {
@@ -162,7 +236,7 @@ export default function App() {
   };
 
   const handleToggleMiniGadget = () => {
-    handleUpdateConfig({ miniMode: !config.miniMode });
+    handleUpdateConfig(prev => ({ miniMode: !prev.miniMode }));
   };
 
   const handleOpenCalibrationFromMini = () => {
@@ -198,7 +272,7 @@ export default function App() {
         <Header
           config={config}
           activeProfile={activeProfile}
-          onOpenCalibration={() => setShowCalibration(true)}
+          onOpenDailyHistory={() => setShowDailyHistory(true)}
           onOpenSettings={() => setShowSettings(true)}
           onToggleMiniGadget={handleToggleMiniGadget}
           onSelectTheme={handleSelectTheme}
@@ -250,7 +324,9 @@ export default function App() {
             />
             <PingTestCard />
             <AppBreakdownCard
-              sessionBytes={activeProfile.sessionBytes || 0}
+              config={config}
+              onAccumulateProcesses={handleAccumulateProcesses}
+              onResetCumulative={() => handleUpdateConfig({ processCumulative: {} })}
             />
           </div>
 
@@ -267,12 +343,24 @@ export default function App() {
         />
       )}
 
+      {showDailyHistory && (
+        <DailyHistoryModal
+          config={config}
+          activeProfile={activeProfile}
+          onClose={() => setShowDailyHistory(false)}
+        />
+      )}
+
       {showSettings && (
         <SettingsModal
           config={config}
           activeProfile={activeProfile}
           onSave={handleUpdateConfig}
           onSaveProfile={handleUpdateActiveProfile}
+          onImportConfig={(newConfig) => {
+            setConfig(newConfig);
+            saveConfig(newConfig);
+          }}
           onClose={() => setShowSettings(false)}
         />
       )}

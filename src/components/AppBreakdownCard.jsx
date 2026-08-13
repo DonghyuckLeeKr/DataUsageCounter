@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle2, Globe, ArrowDown, HardDrive, XCircle } from 'lucide-react';
-import { fetchActiveProcesses, terminateProcess } from '../services/networkTelemetry';
-import { formatSpeed } from '../utils/formatters';
+import { RefreshCw, CheckCircle2, Globe, ArrowDown, HardDrive, XCircle, RotateCcw } from 'lucide-react';
+import { fetchTopProcesses, terminateProcess } from '../services/networkTelemetry';
+import { formatSpeed, formatBytes } from '../utils/formatters';
 
-export default function AppBreakdownCard() {
+export default function AppBreakdownCard({ config, onAccumulateProcesses, onResetCumulative }) {
   const [processes, setProcesses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sortMode, setSortMode] = useState('cumulative'); // 'cumulative' or 'speed'
+
+  const processCumulative = config?.processCumulative || {};
 
   const loadProcesses = async () => {
     try {
-      const list = await fetchActiveProcesses();
-      setProcesses(list);
+      const list = await fetchTopProcesses();
+      if (list && list.length > 0) {
+        setProcesses(list);
+        if (onAccumulateProcesses) {
+          onAccumulateProcesses(list);
+        }
+      }
     } catch (e) {
-      console.warn(e);
+      console.warn('Process load error', e);
     } finally {
       setLoading(false);
     }
@@ -20,12 +28,12 @@ export default function AppBreakdownCard() {
 
   useEffect(() => {
     loadProcesses();
-    const interval = setInterval(loadProcesses, 2000); // Refresh process bandwidth every 2s
+    const interval = setInterval(loadProcesses, 2000);
     return () => clearInterval(interval);
   }, []);
 
   const handleKill = async (pid, name) => {
-    if (window.confirm(`정말로 트래픽 폭주 앱 '${name}' (PID: ${pid})을(를) 강제 종료하시겠습니까?`)) {
+    if (window.confirm(`트래픽 발생 프로세스 '${name}' (PID: ${pid})을(를) 강제 종료하시겠습니까?`)) {
       const success = await terminateProcess(pid);
       if (success) {
         setProcesses(prev => prev.filter(p => p.pid !== pid));
@@ -33,54 +41,122 @@ export default function AppBreakdownCard() {
     }
   };
 
-  const isRealData = processes.length > 0 && processes[0].isReal;
+  const handleResetCumulative = () => {
+    if (window.confirm('프로세스별 누적 데이터 사용량 기록을 초기화하시겠습니까?')) {
+      if (onResetCumulative) {
+        onResetCumulative();
+      }
+    }
+  };
+
+  // Combine live processes and cumulative history
+  const combinedList = [...processes].map(proc => {
+    const cumulBytes = processCumulative[proc.name]?.bytes || 0;
+    return {
+      ...proc,
+      cumulBytes
+    };
+  });
+
+  // Sort based on sortMode
+  if (sortMode === 'cumulative') {
+    combinedList.sort((a, b) => b.cumulBytes - a.cumulBytes);
+  } else {
+    combinedList.sort((a, b) => b.downloadSpeed - a.downloadSpeed);
+  }
 
   return (
     <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
       
       {/* Card Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-main)' }}>
-              실시간 앱별 다운로드 출처 & 강제 차단
+              프로세스별 누적 데이터 & 킬 스위치
             </h3>
             
-            {/* Real Process vs Demo Badge */}
             <span style={{
               fontSize: '0.7rem',
               fontWeight: '700',
               padding: '2px 8px',
               borderRadius: '12px',
-              background: isRealData ? 'rgba(52, 211, 153, 0.15)' : 'rgba(251, 191, 36, 0.15)',
-              color: isRealData ? 'var(--accent-emerald)' : 'var(--accent-amber)',
-              border: `1px solid ${isRealData ? 'rgba(52, 211, 153, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
+              background: 'rgba(52, 211, 153, 0.15)',
+              color: 'var(--accent-emerald)',
+              border: '1px solid rgba(52, 211, 153, 0.3)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px'
             }}>
               <CheckCircle2 size={11} />
-              <span>{isRealData ? '⚡ 실시간 소켓 추적' : '데모 시뮬레이션'}</span>
+              <span>실시간 감시</span>
             </span>
           </div>
 
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-            현재 인터넷을 다운로드 중인 내 PC의 프로세스 및 연결 도메인
+            내 PC에서 데이터를 많이 소모하는 프로세스 실시간 추적 및 누적 합산
           </p>
         </div>
 
-        <button
-          onClick={loadProcesses}
-          style={{ background: 'none', border: 'none', color: 'var(--brand-color)', cursor: 'pointer', padding: '4px' }}
-          title="트래픽 추적 새로고침"
-        >
-          <RefreshCw size={15} className={loading ? 'spin' : ''} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Sort Mode Buttons */}
+          <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '2px' }}>
+            <button
+              onClick={() => setSortMode('cumulative')}
+              style={{
+                background: sortMode === 'cumulative' ? 'var(--brand-badge-bg)' : 'transparent',
+                border: 'none',
+                color: sortMode === 'cumulative' ? 'var(--brand-color)' : 'var(--text-muted)',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                fontWeight: sortMode === 'cumulative' ? '700' : '400'
+              }}
+            >
+              누적순
+            </button>
+            <button
+              onClick={() => setSortMode('speed')}
+              style={{
+                background: sortMode === 'speed' ? 'var(--brand-badge-bg)' : 'transparent',
+                border: 'none',
+                color: sortMode === 'speed' ? 'var(--brand-color)' : 'var(--text-muted)',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                fontWeight: sortMode === 'speed' ? '700' : '400'
+              }}
+            >
+              속도순
+            </button>
+          </div>
+
+          {/* Reset Cumulative Button */}
+          <button
+            onClick={handleResetCumulative}
+            className="glass-btn"
+            style={{ padding: '4px 8px', fontSize: '0.72rem' }}
+            title="프로세스 누적 사용량 초기화"
+          >
+            <RotateCcw size={12} />
+          </button>
+
+          {/* Refresh Button */}
+          <button
+            onClick={loadProcesses}
+            style={{ background: 'none', border: 'none', color: 'var(--brand-color)', cursor: 'pointer', padding: '4px' }}
+            title="프로세스 새로고침"
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {/* Process Network Traffic Table List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {processes.slice(0, 5).map((proc, index) => (
+        {combinedList.slice(0, 5).map((proc, index) => (
           <div
             key={proc.pid || index}
             style={{
@@ -112,9 +188,14 @@ export default function AppBreakdownCard() {
               </div>
 
               <div style={{ overflow: 'hidden' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', display: 'block' }}>
-                  {proc.name} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>(PID: {proc.pid})</span>
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                    {proc.name}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    (PID: {proc.pid})
+                  </span>
+                </div>
                 
                 {/* Target Domain / Destination Host */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '1px' }}>
@@ -126,14 +207,23 @@ export default function AppBreakdownCard() {
               </div>
             </div>
 
-            {/* Network Speed Indicators & Kill Button */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'right', flexShrink: 0 }}>
+            {/* Cumulative & Speed Indicators */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', textAlign: 'right', flexShrink: 0 }}>
               <div>
-                <span style={{ fontSize: '0.68rem', color: 'var(--accent-blue)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
-                  <ArrowDown size={10} /> 수신 속도
+                <span style={{ fontSize: '0.68rem', color: 'var(--accent-blue)', fontWeight: '700', display: 'block' }}>
+                  누적 사용량
                 </span>
                 <span style={{ fontSize: '0.92rem', fontWeight: '800', color: 'var(--text-main)' }}>
-                  {formatSpeed(proc.downloadSpeedBytes, 'MBs')}
+                  {formatBytes(proc.cumulBytes)}
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
+                  <ArrowDown size={10} color="var(--accent-blue)" /> 실시간
+                </span>
+                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
+                  {formatSpeed(proc.downloadSpeed, 'MBs')}
                 </span>
               </div>
 
@@ -153,7 +243,7 @@ export default function AppBreakdownCard() {
                   alignItems: 'center',
                   gap: '3px'
                 }}
-                title="트래픽 폭주 프로세스 강제 종료"
+                title="이 프로세스 강제 종료"
               >
                 <XCircle size={12} />
                 <span>종료</span>

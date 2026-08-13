@@ -1,14 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
-
-:root {
-  --font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+:root,
+[data-theme="soft-dark"] {
+  --font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
   
   /* Ocean Deep Marine Slate (Default Theme) */
   --bg-primary: #0a1124;
   --bg-gradient: radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.15), transparent 45%),
                  radial-gradient(circle at 10% 80%, rgba(56, 189, 248, 0.12), transparent 40%),
                  linear-gradient(145deg, #090e1a 0%, #0d1b38 50%, #070d18 100%);
-  --glass-bg: rgba(13, 27, 56, 0.72);
+  --glass-bg: rgba(13, 27, 56, 0.75);
   --glass-card: rgba(18, 38, 77, 0.55);
   --glass-card-hover: rgba(26, 52, 105, 0.75);
   --glass-border: rgba(56, 189, 248, 0.22);
@@ -42,7 +41,12 @@
   --glass-border: rgba(56, 189, 248, 0.18);
   --glass-border-light: rgba(255, 255, 255, 0.06);
   --shadow-glass: 0 16px 40px rgba(0, 0, 0, 0.7);
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
   --brand-color: #38bdf8;
+  --brand-badge-bg: rgba(56, 189, 248, 0.18);
+  --brand-badge-border: rgba(56, 189, 248, 0.35);
 }
 
 [data-theme="nordic-light"] {
@@ -59,6 +63,8 @@
   --text-muted: #475569;
   --text-dim: #94a3b8;
   --brand-color: #0284c7;
+  --brand-badge-bg: rgba(14, 165, 233, 0.15);
+  --brand-badge-border: rgba(14, 165, 233, 0.3);
 }
 
 [data-theme="neon-cyber"] {
@@ -68,8 +74,13 @@
   --glass-bg: rgba(10, 25, 54, 0.85);
   --glass-card: rgba(12, 34, 74, 0.7);
   --glass-border: #00f0ff;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
   --brand-color: #00f0ff;
   --accent-blue: #00f0ff;
+  --brand-badge-bg: rgba(0, 240, 255, 0.2);
+  --brand-badge-border: rgba(0, 240, 255, 0.4);
 }
 
 * {
@@ -80,8 +91,9 @@
   -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background: transparent;
+html, body, #root {
+  background: transparent !important;
+  background-color: transparent !important;
   color: var(--text-main);
   overflow: hidden;
   height: 100vh;
@@ -100,9 +112,8 @@ body {
   overflow: hidden;
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-glass);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
   position: relative;
+  clip-path: inset(0 round 20px); /* Mathematically clips all outer corner pixels */
 }
 
 /* Ocean Wave Ambient Glow Effect */
