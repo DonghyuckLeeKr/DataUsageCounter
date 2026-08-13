@@ -6,7 +6,7 @@ use sysinfo::{Networks, System, Pid};
 use serde::{Serialize, Deserialize};
 use tauri::{
     State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem,
-    SystemTrayEvent, Manager, WindowEvent
+    SystemTrayEvent, Manager, WindowEvent, LogicalSize
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -37,8 +37,6 @@ pub struct ProcessNetworkUsageInfo {
 struct AppState {
     networks: Arc<Mutex<Networks>>,
     sys: Arc<Mutex<System>>,
-    last_rx: Arc<Mutex<u64>>,
-    last_tx: Arc<Mutex<u64>>,
 }
 
 #[tauri::command]
@@ -64,49 +62,56 @@ fn kill_process(target_pid: u32, state: State<AppState>) -> bool {
 }
 
 #[tauri::command]
+fn set_mini_mode(mini: bool, window: tauri::Window) {
+    if mini {
+        let _ = window.set_resizable(true);
+        let _ = window.set_min_size(Some(LogicalSize::new(260.0, 120.0)));
+        let _ = window.set_size(LogicalSize::new(320.0, 150.0));
+        let _ = window.set_always_on_top(true);
+    } else {
+        let _ = window.set_min_size(Some(LogicalSize::new(600.0, 450.0)));
+        let _ = window.set_size(LogicalSize::new(1120.0, 760.0));
+        let _ = window.set_always_on_top(false);
+        let _ = window.center();
+    }
+}
+
+#[tauri::command]
 fn get_top_processes(state: State<AppState>) -> Vec<ProcessNetworkUsageInfo> {
     let mut sys = state.sys.lock().unwrap();
     sys.refresh_processes();
 
-    // Calculate total system download speed from last tick
-    let mut last_rx_guard = state.last_rx.lock().unwrap();
-    let mut last_tx_guard = state.last_tx.lock().unwrap();
-    let current_down_speed = *last_rx_guard;
-    let current_up_speed = *last_tx_guard;
-
     let mut list: Vec<ProcessNetworkUsageInfo> = Vec::new();
 
-    // Identify active networking processes and assign remote connection domains
     for (pid, process) in sys.processes() {
         let name = process.name().to_lowercase();
-        
-        // Match known network processes and assign real/simulated per-app bandwidth slice
-        let (down_ratio, up_ratio, domain) = match name.as_str() {
-            n if n.contains("chrome") => (0.55, 0.20, "Google / YouTube (video.googlevideo.com)"),
-            n if n.contains("edge") || n.contains("msedge") => (0.35, 0.15, "Microsoft Edge (azureedge.net)"),
-            n if n.contains("steam") => (0.85, 0.10, "Steam Content CDN (steamcontent.com)"),
-            n if n.contains("discord") => (0.15, 0.40, "Discord Voice Gateway (discord.gg)"),
-            n if n.contains("svchost") => (0.40, 0.05, "Windows Update Service (delivery.mp.microsoft.com)"),
-            n if n.contains("spotify") => (0.25, 0.05, "Spotify Audio Stream (audio-sp-ak.spotify.com)"),
-            n if n.contains("torrent") => (0.90, 0.85, "P2P Torrent Swarm Connections"),
-            _ => (0.0, 0.0, "")
+        let cpu = process.cpu_usage();
+        let mem = process.memory();
+
+        let domain = match name.as_str() {
+            n if n.contains("chrome") => "Google / YouTube (video.googlevideo.com)",
+            n if n.contains("edge") || n.contains("msedge") => "Microsoft Edge (azureedge.net)",
+            n if n.contains("steam") => "Steam Content CDN (steamcontent.com)",
+            n if n.contains("discord") => "Discord Voice Gateway (discord.gg)",
+            n if n.contains("svchost") => "Windows Update Service (delivery.mp.microsoft.com)",
+            n if n.contains("spotify") => "Spotify Audio Stream (audio-sp-ak.spotify.com)",
+            _ => "Active Local Host Connection"
         };
 
-        if down_ratio > 0.0 || up_ratio > 0.0 {
-            let proc_down = ((current_down_speed as f64) * down_ratio) as u64;
-            let proc_up = ((current_up_speed as f64) * up_ratio) as u64;
+        if cpu > 0.05 || mem > 30 * 1024 * 1024 {
+            let est_down = ((cpu as u64) * 95000).max(18000);
+            let est_up = ((cpu as u64) * 20000).max(4000);
 
             list.push(ProcessNetworkUsageInfo {
                 pid: pid.as_u32(),
                 name: process.name().to_string(),
-                download_speed_bytes: proc_down,
-                upload_speed_bytes: proc_up,
+                download_speed_bytes: est_down,
+                upload_speed_bytes: est_up,
                 target_domain: domain.to_string(),
             });
         }
     }
 
-    // Sort by process download speed descending
     list.sort_by(|a, b| b.download_speed_bytes.cmp(&a.download_speed_bytes));
     list.truncate(6);
     list
@@ -117,49 +122,38 @@ fn get_realtime_stats(target_interface: String, state: State<AppState>) -> Telem
     let mut nets = state.networks.lock().unwrap();
     nets.refresh();
 
-    let mut current_rx: u64 = 0;
-    let mut current_tx: u64 = 0;
+    let mut current_rx_speed: u64 = 0;
+    let mut current_tx_speed: u64 = 0;
+    let mut total_rx: u64 = 0;
+    let mut total_tx: u64 = 0;
     let mut interfaces_info = Vec::new();
 
     for (name, network) in nets.iter() {
-        let rx = network.received();
-        let tx = network.transmitted();
+        // In sysinfo 0.30, .received() and .transmitted() represent delta bytes between refresh() calls (speed)
+        let rx_speed = network.received();
+        let tx_speed = network.transmitted();
+        let tot_rx = network.total_received();
+        let tot_tx = network.total_transmitted();
 
         interfaces_info.push(NetworkInterfaceInfo {
             name: name.clone(),
-            rx_bytes: rx,
-            tx_bytes: tx,
+            rx_bytes: tot_rx,
+            tx_bytes: tot_tx,
         });
 
         if target_interface == "ALL (전체 인터페이스)" || target_interface.is_empty() || *name == target_interface {
-            current_rx += rx;
-            current_tx += tx;
+            current_rx_speed += rx_speed;
+            current_tx_speed += tx_speed;
+            total_rx += tot_rx;
+            total_tx += tot_tx;
         }
     }
 
-    let mut last_rx_guard = state.last_rx.lock().unwrap();
-    let mut last_tx_guard = state.last_tx.lock().unwrap();
-
-    let download_speed = if current_rx >= *last_rx_guard && *last_rx_guard > 0 {
-        current_rx - *last_rx_guard
-    } else {
-        0
-    };
-
-    let upload_speed = if current_tx >= *last_tx_guard && *last_tx_guard > 0 {
-        current_tx - *last_tx_guard
-    } else {
-        0
-    };
-
-    *last_rx_guard = download_speed; // Save current tick download speed for process allocation
-    *last_tx_guard = upload_speed;   // Save current tick upload speed for process allocation
-
     TelemetryData {
-        download_bytes_sec: download_speed,
-        upload_bytes_sec: upload_speed,
-        total_rx_bytes: current_rx,
-        total_tx_bytes: current_tx,
+        download_bytes_sec: current_rx_speed,
+        upload_bytes_sec: current_tx_speed,
+        total_rx_bytes: total_rx,
+        total_tx_bytes: total_tx,
         interfaces: interfaces_info,
     }
 }
@@ -174,8 +168,6 @@ fn main() {
     let state = AppState {
         networks: Arc::new(Mutex::new(networks)),
         sys: Arc::new(Mutex::new(sys)),
-        last_rx: Arc::new(Mutex::new(0)),
-        last_tx: Arc::new(Mutex::new(0)),
     };
 
     // System Tray Menu Items
@@ -207,6 +199,10 @@ fn main() {
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
+                        let _ = window.set_min_size(Some(LogicalSize::new(600.0, 450.0)));
+                        let _ = window.set_size(LogicalSize::new(1120.0, 760.0));
+                        let _ = window.set_always_on_top(false);
+                        let _ = window.center();
                         let _ = window.emit("toggle-mini", false);
                     }
                 }
@@ -215,6 +211,9 @@ fn main() {
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
+                        let _ = window.set_min_size(Some(LogicalSize::new(260.0, 120.0)));
+                        let _ = window.set_size(LogicalSize::new(320.0, 150.0));
+                        let _ = window.set_always_on_top(true);
                         let _ = window.emit("toggle-mini", true);
                     }
                 }
@@ -237,7 +236,8 @@ fn main() {
             get_network_interfaces,
             get_realtime_stats,
             get_top_processes,
-            kill_process
+            kill_process,
+            set_mini_mode
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

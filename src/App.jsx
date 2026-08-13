@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import TitleBar from './components/TitleBar';
+import { loadConfig, saveConfig, calculateTotalUsedGB } from './services/storageService';
+import { fetchRealtimeStats, isTauriAvailable, fetchNetworkInterfaces, setWindowMiniMode } from './services/networkTelemetry';
+import { checkAndNotifyThresholds } from './services/notificationService';
 import Header from './components/Header';
 import QuickStatsStrip from './components/QuickStatsStrip';
 import QuotaRingCard from './components/QuotaRingCard';
-import LiveSpeedCard from './components/LiveSpeedCard';
 import TrafficTimeSeriesChart from './components/TrafficTimeSeriesChart';
-import AppBreakdownCard from './components/AppBreakdownCard';
+import LiveSpeedCard from './components/LiveSpeedCard';
 import PingTestCard from './components/PingTestCard';
+import AppBreakdownCard from './components/AppBreakdownCard';
 import MiniGadget from './components/MiniGadget';
+import TitleBar from './components/TitleBar';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
-import { loadConfig, saveConfig, calculateTotalUsedGB } from './services/storageService';
-import { fetchRealtimeStats, isTauriAvailable } from './services/networkTelemetry';
-import { checkAndNotifyThresholds } from './services/notificationService';
 
 export default function App() {
-  const [config, setConfig] = useState(loadConfig);
+  const [config, setConfig] = useState(loadConfig());
   const [telemetry, setTelemetry] = useState({
     downloadSpeed: 0,
     uploadSpeed: 0,
@@ -34,23 +34,7 @@ export default function App() {
 
   // Adjust Tauri window size & always-on-top mode dynamically when switching miniMode
   useEffect(() => {
-    const syncWindowMode = async () => {
-      if (isTauriAvailable()) {
-        try {
-          const { appWindow, LogicalSize } = await import('@tauri-apps/api/window');
-          if (config.miniMode) {
-            await appWindow.setSize(new LogicalSize(320, 150));
-            await appWindow.setAlwaysOnTop(true);
-          } else {
-            await appWindow.setSize(new LogicalSize(1120, 760));
-            await appWindow.setAlwaysOnTop(false);
-          }
-        } catch (e) {
-          console.warn('Failed to resize window via Tauri API', e);
-        }
-      }
-    };
-    syncWindowMode();
+    setWindowMiniMode(config.miniMode);
   }, [config.miniMode]);
 
   // Listen for Tauri IPC System Tray events ("toggle-mini")
@@ -59,11 +43,14 @@ export default function App() {
     const listenTrayEvents = async () => {
       if (isTauriAvailable()) {
         try {
-          const { listen } = await import('@tauri-apps/api/event');
-          unlisten = await listen('toggle-mini', (event) => {
-            const isMini = Boolean(event.payload);
-            handleUpdateConfig({ miniMode: isMini });
-          });
+          const eventPkg = '@tauri-apps/api/event';
+          const { listen } = await import(/* @vite-ignore */ eventPkg);
+          if (listen) {
+            unlisten = await listen('toggle-mini', (event) => {
+              const isMini = Boolean(event.payload);
+              handleUpdateConfig({ miniMode: isMini });
+            });
+          }
         } catch (e) {
           console.warn(e);
         }
@@ -109,12 +96,12 @@ export default function App() {
           });
         }
       } catch (err) {
-        console.error('Telemetry tick error', err);
+        console.error('Telemetry tick error in App.jsx', err);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [config.selectedInterface]);
+  }, [config.selectedInterface, config.monthlyLimitGB, config.carrierName]);
 
   const handleUpdateConfig = (newPartial) => {
     const updated = { ...config, ...newPartial };
@@ -133,7 +120,7 @@ export default function App() {
   // Render Always-on-top Mini Gadget View if miniMode is active (100% compact window, no blank margins)
   if (config.miniMode) {
     return (
-      <div style={{ width: '100vw', height: '100vh', background: 'transparent', overflow: 'hidden' }}>
+      <div style={{ width: '100vw', height: '100vh', background: 'transparent', overflow: 'hidden', padding: 0, margin: 0 }}>
         <MiniGadget
           config={config}
           telemetry={telemetry}
@@ -185,7 +172,7 @@ export default function App() {
           alignItems: 'start'
         }}>
           
-          {/* Left Column: Data Quota (with embedded short recommendation pill) & Rolling Traffic Graph */}
+          {/* Left Column: Data Quota & Rolling Traffic Graph */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <QuotaRingCard
               config={config}

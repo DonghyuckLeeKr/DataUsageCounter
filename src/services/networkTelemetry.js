@@ -9,7 +9,7 @@ let simState = {
   totalTx: 1024 * 1024 * 120, // 120 MB base
 };
 
-const getTauriInvoke = async () => {
+export const getTauriInvoke = async () => {
   if (typeof window !== 'undefined') {
     if (window.__TAURI__?.tauri?.invoke) {
       return window.__TAURI__.tauri.invoke;
@@ -26,6 +26,20 @@ const getTauriInvoke = async () => {
     // ignore
   }
   return null;
+};
+
+export const setWindowMiniMode = async (mini) => {
+  if (isTauriAvailable()) {
+    try {
+      const invoke = await getTauriInvoke();
+      if (invoke) {
+        return await invoke('set_mini_mode', { mini: Boolean(mini) });
+      }
+    } catch (e) {
+      console.warn('Failed to set mini mode via Tauri', e);
+    }
+  }
+  return false;
 };
 
 export const fetchNetworkInterfaces = async () => {
