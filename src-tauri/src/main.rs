@@ -9,6 +9,11 @@ use tauri::{
     SystemTrayEvent, Manager, WindowEvent, LogicalSize
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkInterfaceInfo {
     pub name: String,
@@ -68,16 +73,23 @@ fn update_tray_tooltip(tooltip: String, app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn set_auto_start(enable: bool) -> bool {
-    if let Ok(exe_path) = std::env::current_exe() {
-        let exe_str = exe_path.to_string_lossy().to_string();
-        if enable {
-            let cmd = format!("reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v DolphinData /t REG_SZ /d \"\\\"{}\\\"\" /f", exe_str);
-            let _ = std::process::Command::new("cmd").args(&["/C", &cmd]).output();
-            return true;
-        } else {
-            let cmd = "reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v DolphinData /f";
-            let _ = std::process::Command::new("cmd").args(&["/C", cmd]).output();
-            return false;
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe_path) = std::env::current_exe() {
+            let exe_str = exe_path.to_string_lossy().to_string();
+            if enable {
+                let _ = std::process::Command::new("reg")
+                    .args(&["add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "DolphinData", "/t", "REG_SZ", "/d", &format!("\"{}\"", exe_str), "/f"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+                return true;
+            } else {
+                let _ = std::process::Command::new("reg")
+                    .args(&["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "DolphinData", "/f"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+                return false;
+            }
         }
     }
     false
@@ -85,9 +97,14 @@ fn set_auto_start(enable: bool) -> bool {
 
 #[tauri::command]
 fn get_auto_start() -> bool {
-    let cmd = "reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v DolphinData";
-    if let Ok(output) = std::process::Command::new("cmd").args(&["/C", cmd]).output() {
-        return output.status.success();
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = std::process::Command::new("reg")
+            .args(&["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "DolphinData"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output() {
+            return output.status.success();
+        }
     }
     false
 }

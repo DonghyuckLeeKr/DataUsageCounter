@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Check, Edit3, RefreshCw, Radio, Sparkles } from 'lucide-react';
 import { detectLteRouterCarrier } from '../services/routerDetectionService';
+import { getBillingPeriod } from '../services/storageService';
 
 export default function CalibrationModal({ profile, onSave, onClose }) {
   const [carrierInput, setCarrierInput] = useState(profile.carrierName || profile.name || '모바일 데이터 요금제');
@@ -32,14 +33,15 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
     e.preventDefault();
     const parsedBaseline = parseFloat(baselineInput) || 0;
     const parsedLimit = parseFloat(limitInput) || 100;
-    const parsedResetDay = parseInt(resetDayInput, 10) || 1;
+    const parsedResetDay = Math.min(31, Math.max(1, parseInt(resetDayInput, 10) || 1));
 
     onSave({
       name: carrierInput.trim() || profile.name,
       carrierName: carrierInput.trim() || '데이터 요금제',
       initialBaselineGB: Math.max(0, parsedBaseline),
       monthlyLimitGB: Math.max(1, parsedLimit),
-      resetDay: Math.min(31, Math.max(1, parsedResetDay)),
+      resetDay: parsedResetDay,
+      lastResetPeriod: getBillingPeriod(parsedResetDay),
       sessionBytes: 0
     });
     onClose();

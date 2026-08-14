@@ -1,52 +1,71 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Check, Settings, Download, Upload, FileText, Calendar, Power, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef, memo } from 'react';
+import { X, Check, Settings, Download, Upload, FileText, Power } from 'lucide-react';
 import { fetchNetworkInterfaces, setAutoStart, getAutoStart } from '../services/networkTelemetry';
 
-export default function SettingsModal({
+function SettingsModal({
   config,
   activeProfile,
   onSave,
   onSaveProfile,
   onImportConfig,
-  onOpenDailyHistory,
   onClose
 }) {
-  const [interfaces, setInterfaces] = useState([]);
+  const [interfaces, setInterfaces] = useState([
+    'ALL (전체 인터페이스)',
+    'Ethernet 2 (LG U+ LTE 라우터 USB)',
+    'Wi-Fi (무선 랜 / 핫스팟)'
+  ]);
   const [selectedIf, setSelectedIf] = useState(
-    activeProfile?.selectedInterface || config.selectedInterface || 'ALL (전체 인터페이스)'
+    activeProfile?.selectedInterface || config?.selectedInterface || 'ALL (전체 인터페이스)'
   );
-  const [unitMode, setUnitMode] = useState(config.unitMode || 'MBs');
-  const [autoStartEnabled, setAutoStartEnabled] = useState(Boolean(config.autoStart));
+  const [unitMode, setUnitMode] = useState(config?.unitMode || 'MBs');
+  const [autoStartEnabled, setAutoStartEnabled] = useState(Boolean(config?.autoStart));
   const [dailySurgeLimit, setDailySurgeLimit] = useState(
-    config.dailySurgeLimitGB !== undefined ? String(config.dailySurgeLimitGB) : '5'
+    config?.dailySurgeLimitGB !== undefined ? String(config.dailySurgeLimitGB) : '5'
   );
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetchNetworkInterfaces().then(list => setInterfaces(list));
-    getAutoStart().then(enabled => setAutoStartEnabled(enabled));
+    let isMounted = true;
+    fetchNetworkInterfaces().then(list => {
+      if (isMounted && Array.isArray(list) && list.length > 0) {
+        setInterfaces(list);
+      }
+    });
+    getAutoStart().then(enabled => {
+      if (isMounted) {
+        setAutoStartEnabled(Boolean(enabled));
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Save auto-start in background without blocking
+    setAutoStart(autoStartEnabled).catch(err => console.warn(err));
+
     if (onSaveProfile) {
       onSaveProfile({ selectedInterface: selectedIf });
     }
-    
-    // Apply auto-start in Windows registry
-    await setAutoStart(autoStartEnabled);
 
-    onSave({
-      unitMode,
-      autoStart: autoStartEnabled,
-      dailySurgeLimitGB: Math.max(0.5, parseFloat(dailySurgeLimit) || 5)
-    });
+    if (onSave) {
+      onSave({
+        unitMode,
+        autoStart: autoStartEnabled,
+        dailySurgeLimitGB: Math.max(0.5, parseFloat(dailySurgeLimit) || 5)
+      });
+    }
+
     onClose();
   };
 
   // Export CSV with UTF-8 BOM (\uFEFF) to fix Excel Korean character encoding
   const handleExportCSV = () => {
-    const profiles = config.profiles || (activeProfile ? [activeProfile] : []);
+    const profiles = config?.profiles || (activeProfile ? [activeProfile] : []);
     const now = new Date().toISOString();
     
     let csvString = "측정일시,프로필명,통신사,기본보정량(GB),실시간누적(GB),총사용량(GB),월간한도(GB),소진율(%),리셋일,연결어댑터\n";
@@ -121,42 +140,62 @@ export default function SettingsModal({
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.65)',
-      backdropFilter: 'blur(16px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '530px', padding: '26px', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(5, 10, 24, 0.82)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '16px'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '520px',
+          padding: '24px',
+          position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          background: 'var(--bg-primary)',
+          borderRadius: '16px',
+          border: '1px solid var(--glass-border)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)'
+        }}
+      >
         
+        {/* Top Close Button */}
         <button
+          type="button"
           onClick={onClose}
           style={{
             position: 'absolute',
-            top: '20px',
-            right: '20px',
+            top: '18px',
+            right: '18px',
             background: 'none',
             border: 'none',
             color: 'var(--text-muted)',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            padding: '4px'
           }}
         >
           <X size={20} />
         </button>
 
+        {/* Modal Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
             background: 'var(--brand-badge-bg)',
             border: '1px solid var(--brand-badge-border)',
             display: 'flex',
@@ -176,16 +215,21 @@ export default function SettingsModal({
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Windows Auto-Start Toggle Switch */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 14px',
-            background: 'var(--glass-card)',
-            border: '1px solid var(--glass-border-light)',
-            borderRadius: '10px'
-          }}>
+          {/* Windows Auto-Start Toggle Row */}
+          <div
+            onClick={() => setAutoStartEnabled(prev => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 14px',
+              background: 'var(--glass-card)',
+              border: '1px solid var(--glass-border-light)',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Power size={18} color="var(--brand-color)" />
               <div>
@@ -198,14 +242,13 @@ export default function SettingsModal({
               </div>
             </div>
 
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={autoStartEnabled}
-                onChange={(e) => setAutoStartEnabled(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--brand-color)', cursor: 'pointer' }}
-              />
-            </label>
+            <input
+              type="checkbox"
+              checked={autoStartEnabled}
+              onChange={(e) => setAutoStartEnabled(e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: '18px', height: '18px', accentColor: 'var(--brand-color)', cursor: 'pointer' }}
+            />
           </div>
 
           {/* Daily Surge Limiter */}
@@ -241,10 +284,10 @@ export default function SettingsModal({
               value={selectedIf}
               onChange={(e) => setSelectedIf(e.target.value)}
               className="glass-input"
-              style={{ color: 'var(--text-main)', width: '100%' }}
+              style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
             >
               {interfaces.map((name, idx) => (
-                <option key={idx} value={name} style={{ background: 'var(--glass-bg)', color: 'var(--text-main)' }}>{name}</option>
+                <option key={idx} value={name} style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>{name}</option>
               ))}
             </select>
             <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
@@ -267,7 +310,8 @@ export default function SettingsModal({
                   background: unitMode === 'MBs' ? 'var(--brand-badge-bg)' : undefined,
                   borderColor: unitMode === 'MBs' ? 'var(--brand-color)' : undefined,
                   color: unitMode === 'MBs' ? 'var(--brand-color)' : 'var(--text-main)',
-                  fontWeight: unitMode === 'MBs' ? 700 : 500
+                  fontWeight: unitMode === 'MBs' ? 700 : 500,
+                  cursor: 'pointer'
                 }}
               >
                 MB/s (초당 메가바이트)
@@ -281,7 +325,8 @@ export default function SettingsModal({
                   background: unitMode === 'Mbps' ? 'var(--brand-badge-bg)' : undefined,
                   borderColor: unitMode === 'Mbps' ? 'var(--brand-color)' : undefined,
                   color: unitMode === 'Mbps' ? 'var(--brand-color)' : 'var(--text-main)',
-                  fontWeight: unitMode === 'Mbps' ? 700 : 500
+                  fontWeight: unitMode === 'Mbps' ? 700 : 500,
+                  cursor: 'pointer'
                 }}
               >
                 Mbps (초당 메가비트)
@@ -301,7 +346,7 @@ export default function SettingsModal({
                 type="button"
                 onClick={handleExportCSV}
                 className="glass-btn"
-                style={{ justifyContent: 'center', fontSize: '0.78rem' }}
+                style={{ justifyContent: 'center', fontSize: '0.78rem', cursor: 'pointer' }}
                 title="엑셀에서 한글 깨짐 없이 열 수 있는 CSV 리포트를 내보냅니다."
               >
                 <FileText size={14} color="var(--accent-emerald)" />
@@ -313,7 +358,7 @@ export default function SettingsModal({
                 type="button"
                 onClick={handleExportJSON}
                 className="glass-btn"
-                style={{ justifyContent: 'center', fontSize: '0.78rem' }}
+                style={{ justifyContent: 'center', fontSize: '0.78rem', cursor: 'pointer' }}
                 title="모든 요금제 프로필과 설정을 JSON 파일로 백업합니다."
               >
                 <Download size={14} color="var(--accent-blue)" />
@@ -334,7 +379,7 @@ export default function SettingsModal({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="glass-btn"
-                style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem', borderColor: 'rgba(167, 139, 250, 0.3)', color: 'var(--accent-purple)' }}
+                style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem', borderColor: 'rgba(167, 139, 250, 0.3)', color: 'var(--accent-purple)', cursor: 'pointer' }}
                 title="이전에 백업해 둔 설정(JSON) 파일을 불러와 복원합니다."
               >
                 <Upload size={14} />
@@ -345,10 +390,10 @@ export default function SettingsModal({
 
           {/* Buttons */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px', paddingTop: '14px', borderTop: '1px solid var(--glass-border)' }}>
-            <button type="button" onClick={onClose} className="glass-btn">
+            <button type="button" onClick={onClose} className="glass-btn" style={{ cursor: 'pointer' }}>
               취소
             </button>
-            <button type="submit" className="glass-btn glass-btn-primary">
+            <button type="submit" className="glass-btn glass-btn-primary" style={{ cursor: 'pointer' }}>
               <Check size={16} />
               <span>설정 저장</span>
             </button>
@@ -360,3 +405,5 @@ export default function SettingsModal({
     </div>
   );
 }
+
+export default memo(SettingsModal);

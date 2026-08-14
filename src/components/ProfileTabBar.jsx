@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Trash2, Edit3 } from 'lucide-react';
-import { calculateTotalUsedGB } from '../services/storageService';
+import { calculateTotalUsedGB, getBillingPeriod } from '../services/storageService';
 
 export default function ProfileTabBar({
   config,
@@ -26,7 +26,7 @@ export default function ProfileTabBar({
       initialBaselineGB: 0,
       sessionBytes: 0,
       resetDay: 1,
-      lastResetPeriod: '',
+      lastResetPeriod: getBillingPeriod(1),
       selectedInterface: 'ALL (전체 인터페이스)'
     };
     onAddProfile(newProfile);

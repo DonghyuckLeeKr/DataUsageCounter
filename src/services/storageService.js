@@ -1,6 +1,7 @@
-// Storage service with multi-profile, cumulative process tracking, and daily history
+// Storage service with multi-profile, accurate billing-cycle reset, and persistent calibration safeguards
 
 const STORAGE_KEY = 'data_usage_counter_v1_config';
+const BACKUP_KEY = 'data_usage_counter_v1_backup';
 
 export const DEFAULT_PROFILE = {
   id: 'profile-1',
@@ -20,21 +21,48 @@ export const getTodayKey = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export const getCurrentPeriod = () => {
+/**
+ * Calculates the exact billing cycle period string considering the profile's resetDay (1-31).
+ * E.g., if resetDay is 1 and today is 2026-08-14 -> '2026-08@day1'
+ * E.g., if resetDay is 15 and today is 2026-08-14 -> '2026-07@day15'
+ */
+export const getBillingPeriod = (resetDay = 1) => {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1; // 1-12
+  const day = d.getDate(); // 1-31
+
+  const validResetDay = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1));
+
+  let periodYear = year;
+  let periodMonth = month;
+
+  if (day < validResetDay) {
+    // Before this month's reset day -> current cycle started in previous month
+    periodMonth = month - 1;
+    if (periodMonth < 1) {
+      periodMonth = 12;
+      periodYear = year - 1;
+    }
+  }
+
+  return `${periodYear}-${String(periodMonth).padStart(2, '0')}@day${validResetDay}`;
+};
+
+export const getCurrentPeriod = () => {
+  return getBillingPeriod(1);
 };
 
 const DEFAULT_CONFIG = {
   activeProfileId: 'profile-1',
-  profiles: [DEFAULT_PROFILE],
+  profiles: [{ ...DEFAULT_PROFILE, lastResetPeriod: getBillingPeriod(1) }],
   unitMode: 'MBs',      // 'MBs' or 'Mbps'
   theme: 'soft-dark',   // 'soft-dark', 'midnight-black', 'nordic-light', 'neon-cyber'
   miniMode: false,
   autoStart: false,
   dailySurgeLimitGB: 5, // Daily limit in GB (surge alert trigger)
-  dailyHistory: {},     // { '2026-08-13': 1.45, '2026-08-12': 2.30 } in GB
-  processCumulative: {}, // { 'chrome.exe': { bytes: 4200000000, domain: 'Google', lastSeen: '...' } }
+  dailyHistory: {},     // { '2026-08-14': 1.45 } in GB
+  processCumulative: {}, // { 'chrome.exe': { bytes: 4200000000, domain: 'Google' } }
   alerts: {
     t80: true,
     t90: true,
@@ -46,10 +74,14 @@ const DEFAULT_CONFIG = {
 
 export const loadConfig = () => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      raw = localStorage.getItem(BACKUP_KEY);
+    }
+    
     if (!raw) {
       const initial = { ...DEFAULT_CONFIG };
-      initial.profiles[0].lastResetPeriod = getCurrentPeriod();
+      initial.profiles[0].lastResetPeriod = getBillingPeriod(initial.profiles[0].resetDay);
       saveConfig(initial);
       return initial;
     }
@@ -67,24 +99,36 @@ export const loadConfig = () => {
         initialBaselineGB: parsed.initialBaselineGB || 0,
         sessionBytes: parsed.sessionBytes || 0,
         resetDay: parsed.resetDay || 1,
-        lastResetPeriod: parsed.lastResetPeriod || getCurrentPeriod(),
+        lastResetPeriod: getBillingPeriod(parsed.resetDay || 1),
         selectedInterface: parsed.selectedInterface || 'ALL (전체 인터페이스)',
         icon: '📱'
       }];
       merged.activeProfileId = 'profile-1';
     }
 
-    // Auto-reset monthly check for all profiles
-    const currentPeriod = getCurrentPeriod();
+    // Precise Billing Period Check per profile
     let hasReset = false;
     merged.profiles = merged.profiles.map(p => {
-      if (p.lastResetPeriod !== currentPeriod) {
+      const resetDay = p.resetDay || 1;
+      const expectedPeriod = getBillingPeriod(resetDay);
+
+      // If lastResetPeriod is missing/empty, initialize it without wiping user calibration data
+      if (!p.lastResetPeriod) {
+        hasReset = true;
+        return {
+          ...p,
+          lastResetPeriod: expectedPeriod
+        };
+      }
+
+      // If billing cycle has legitimately rolled over to the next month
+      if (p.lastResetPeriod !== expectedPeriod) {
         hasReset = true;
         return {
           ...p,
           initialBaselineGB: 0,
           sessionBytes: 0,
-          lastResetPeriod: currentPeriod
+          lastResetPeriod: expectedPeriod
         };
       }
       return p;
@@ -96,7 +140,15 @@ export const loadConfig = () => {
 
     return merged;
   } catch (e) {
-    console.error('Failed to load storage config', e);
+    console.error('Failed to load storage config, trying backup', e);
+    try {
+      const backupRaw = localStorage.getItem(BACKUP_KEY);
+      if (backupRaw) {
+        return JSON.parse(backupRaw);
+      }
+    } catch (backupErr) {
+      console.error('Backup load failed', backupErr);
+    }
     return DEFAULT_CONFIG;
   }
 };
@@ -104,7 +156,9 @@ export const loadConfig = () => {
 export const saveConfig = (config) => {
   try {
     const updated = { ...config, lastUpdated: new Date().toISOString() };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const serialized = JSON.stringify(updated);
+    localStorage.setItem(STORAGE_KEY, serialized);
+    localStorage.setItem(BACKUP_KEY, serialized); // Dual redundancy
     return updated;
   } catch (e) {
     console.error('Failed to save storage config', e);
@@ -121,7 +175,6 @@ export const getActiveProfile = (config) => {
 
 export const calculateTotalUsedGB = (profileOrConfig) => {
   if (!profileOrConfig) return 0;
-  // If passed root config, resolve active profile first
   const profile = profileOrConfig.profiles ? getActiveProfile(profileOrConfig) : profileOrConfig;
   const baseline = parseFloat(profile.initialBaselineGB) || 0;
   const sessionGB = (profile.sessionBytes || 0) / (1024 * 1024 * 1024);
