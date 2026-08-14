@@ -6,6 +6,14 @@ Tauri(Rust)와 React 기반으로 제작된 가볍고 정밀한 윈도우 데이
 
 ---
 
+## 최신 버전 다운로드 (v1.2.0)
+
+GitHub 릴리즈 페이지에서 최신 윈도우 설치 파일을 바로 다운로드하실 수 있습니다:
+
+- **[Windows 설치 파일 (.exe)](https://github.com/DonghyuckLeeKr/DolphinData/releases/download/v1.2.0/DolphinData_1.2.0_x64-setup.exe)** (권장)
+- **[Windows MSI 패키지 (.msi)](https://github.com/DonghyuckLeeKr/DolphinData/releases/download/v1.2.0/DolphinData_1.2.0_x64_en-US.msi)**
+- 전체 릴리즈 내역: [GitHub Releases v1.2.0](https://github.com/DonghyuckLeeKr/DolphinData/releases/tag/v1.2.0)
+
 ## 주요 기능
 
 ### 1. 다중 요금제 프로필 지원 (최대 5개)
