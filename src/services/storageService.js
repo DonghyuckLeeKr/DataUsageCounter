@@ -1,4 +1,4 @@
-// Storage service with multi-profile, accurate billing-cycle reset, and persistent calibration safeguards
+// Storage service with multi-profile, accurate billing-cycle reset, persistent calibration safeguards, and write corruption defense
 
 const STORAGE_KEY = 'data_usage_counter_v1_config';
 const BACKUP_KEY = 'data_usage_counter_v1_backup';
@@ -23,8 +23,8 @@ export const getTodayKey = () => {
 
 /**
  * Calculates the exact billing cycle period string considering the profile's resetDay (1-31).
- * E.g., if resetDay is 1 and today is 2026-08-14 -> '2026-08@day1'
- * E.g., if resetDay is 15 and today is 2026-08-14 -> '2026-07@day15'
+ * E.g., if resetDay is 1 and today is 2026-08-18 -> '2026-08@day1'
+ * E.g., if resetDay is 25 and today is 2026-08-18 -> '2026-07@day25'
  */
 export const getBillingPeriod = (resetDay = 1) => {
   const d = new Date();
@@ -32,7 +32,7 @@ export const getBillingPeriod = (resetDay = 1) => {
   const month = d.getMonth() + 1; // 1-12
   const day = d.getDate(); // 1-31
 
-  const validResetDay = Math.min(28, Math.max(1, parseInt(resetDay, 10) || 1));
+  const validResetDay = Math.min(31, Math.max(1, parseInt(resetDay, 10) || 1));
 
   let periodYear = year;
   let periodMonth = month;
@@ -61,7 +61,7 @@ const DEFAULT_CONFIG = {
   miniMode: false,
   autoStart: false,
   dailySurgeLimitGB: 5, // Daily limit in GB (surge alert trigger)
-  dailyHistory: {},     // { '2026-08-14': 1.45 } in GB
+  dailyHistory: {},     // { '2026-08-18': 1.45 } in GB
   processCumulative: {}, // { 'chrome.exe': { bytes: 4200000000, domain: 'Google' } }
   alerts: {
     t80: true,
@@ -155,6 +155,12 @@ export const loadConfig = () => {
 
 export const saveConfig = (config) => {
   try {
+    // Corruption defense: Never overwrite localStorage if profiles array is missing or empty
+    if (!config || !Array.isArray(config.profiles) || config.profiles.length === 0) {
+      console.warn('Blocked attempt to save invalid config with missing profiles:', config);
+      return;
+    }
+
     const updated = { ...config, lastUpdated: new Date().toISOString() };
     const serialized = JSON.stringify(updated);
     localStorage.setItem(STORAGE_KEY, serialized);

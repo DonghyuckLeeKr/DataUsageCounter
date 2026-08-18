@@ -50,14 +50,8 @@ export default function App() {
     configRef.current = config;
   }, [config]);
 
-  // Throttled save: only persist to localStorage every 10 seconds to prevent race conditions
-  const saveTickRef = useRef(0);
+  // Throttled save: persist to localStorage every 10 seconds for high-frequency telemetry
   const pendingSaveRef = useRef(false);
-
-  const throttledSaveConfig = useCallback((configToSave) => {
-    pendingSaveRef.current = true;
-    // Will be flushed by the periodic saver
-  }, []);
 
   // Periodic flush: save to localStorage every 10 seconds if there are pending changes
   useEffect(() => {
@@ -105,7 +99,11 @@ export default function App() {
           if (listen) {
             unlisten = await listen('toggle-mini', (event) => {
               const isMini = Boolean(event.payload);
-              handleUpdateConfig({ miniMode: isMini });
+              setConfig(prev => {
+                const updated = { ...prev, miniMode: isMini };
+                saveConfig(updated);
+                return updated;
+              });
             });
           }
         } catch (e) {
@@ -201,9 +199,11 @@ export default function App() {
   }, []); // Empty dependency array: interval created once, reads configRef for latest state
 
   // Saves config immediately for user-initiated actions (theme, settings, calibration)
+  // Safely merges partial updates whether passed as an object or a function
   const handleUpdateConfig = useCallback((newPartial) => {
     setConfig(prev => {
-      const updated = typeof newPartial === 'function' ? newPartial(prev) : { ...prev, ...newPartial };
+      const partial = typeof newPartial === 'function' ? newPartial(prev) : newPartial;
+      const updated = { ...prev, ...partial };
       saveConfig(updated); // Immediate save for explicit user actions
       return updated;
     });
@@ -249,8 +249,12 @@ export default function App() {
   }, []);
 
   const handleSwitchProfile = useCallback((profileId) => {
-    handleUpdateConfig({ activeProfileId: profileId });
-  }, [handleUpdateConfig]);
+    setConfig(prev => {
+      const updated = { ...prev, activeProfileId: profileId };
+      saveConfig(updated);
+      return updated;
+    });
+  }, []);
 
   const handleAddProfile = useCallback((newProfile) => {
     setConfig(prev => {
@@ -274,17 +278,29 @@ export default function App() {
   }, []);
 
   const handleSelectTheme = useCallback((themeName) => {
-    handleUpdateConfig({ theme: themeName });
-  }, [handleUpdateConfig]);
+    setConfig(prev => {
+      const updated = { ...prev, theme: themeName };
+      saveConfig(updated);
+      return updated;
+    });
+  }, []);
 
   const handleToggleMiniGadget = useCallback(() => {
-    handleUpdateConfig(prev => ({ miniMode: !prev.miniMode }));
-  }, [handleUpdateConfig]);
+    setConfig(prev => {
+      const updated = { ...prev, miniMode: !prev.miniMode };
+      saveConfig(updated);
+      return updated;
+    });
+  }, []);
 
   const handleOpenCalibrationFromMini = useCallback(() => {
-    handleUpdateConfig({ miniMode: false });
+    setConfig(prev => {
+      const updated = { ...prev, miniMode: false };
+      saveConfig(updated);
+      return updated;
+    });
     setShowCalibration(true);
-  }, [handleUpdateConfig]);
+  }, []);
 
   // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
