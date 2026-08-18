@@ -35,15 +35,25 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
     const parsedLimit = parseFloat(limitInput) || 100;
     const parsedResetDay = Math.min(31, Math.max(1, parseInt(resetDayInput, 10) || 1));
 
-    onSave({
+    const previousBaseline = parseFloat(profile.initialBaselineGB) || 0;
+    const baselineChanged = Math.abs(parsedBaseline - previousBaseline) > 0.001;
+
+    const saveData = {
       name: carrierInput.trim() || profile.name,
       carrierName: carrierInput.trim() || '데이터 요금제',
       initialBaselineGB: Math.max(0, parsedBaseline),
       monthlyLimitGB: Math.max(1, parsedLimit),
       resetDay: parsedResetDay,
-      lastResetPeriod: getBillingPeriod(parsedResetDay),
-      sessionBytes: 0
-    });
+      lastResetPeriod: getBillingPeriod(parsedResetDay)
+    };
+
+    // Only reset sessionBytes when user actually changed the baseline calibration value
+    // This prevents wiping accumulated real-time traffic when editing name/limit/resetDay
+    if (baselineChanged) {
+      saveData.sessionBytes = 0;
+    }
+
+    onSave(saveData);
     onClose();
   };
 

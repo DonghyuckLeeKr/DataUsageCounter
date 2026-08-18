@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   loadConfig,
   saveConfig,
@@ -44,6 +44,44 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDailyHistory, setShowDailyHistory] = useState(false);
 
+  // useRef to always hold the latest config without re-creating intervals
+  const configRef = useRef(config);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  // Throttled save: only persist to localStorage every 10 seconds to prevent race conditions
+  const saveTickRef = useRef(0);
+  const pendingSaveRef = useRef(false);
+
+  const throttledSaveConfig = useCallback((configToSave) => {
+    pendingSaveRef.current = true;
+    // Will be flushed by the periodic saver
+  }, []);
+
+  // Periodic flush: save to localStorage every 10 seconds if there are pending changes
+  useEffect(() => {
+    const flushInterval = setInterval(() => {
+      if (pendingSaveRef.current) {
+        saveConfig(configRef.current);
+        pendingSaveRef.current = false;
+      }
+    }, 10000);
+
+    // Also save on unmount/page close
+    const handleBeforeUnload = () => {
+      saveConfig(configRef.current);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(flushInterval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Final flush
+      saveConfig(configRef.current);
+    };
+  }, []);
+
   const activeProfile = getActiveProfile(config);
 
   // Sync theme attribute to document root element
@@ -82,10 +120,12 @@ export default function App() {
   }, []);
 
   // Real-time telemetry tick (every 1 second)
+  // Uses configRef to always read the latest state without re-creating the interval
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const currentProfile = getActiveProfile(config);
+        const latestConfig = configRef.current;
+        const currentProfile = getActiveProfile(latestConfig);
         const stats = await fetchRealtimeStats(currentProfile.selectedInterface || 'ALL (전체 인터페이스)');
         if (stats) {
           setTelemetry(stats);
@@ -94,8 +134,8 @@ export default function App() {
           const totalGB = calculateTotalUsedGB(currentProfile);
           const limitGB = currentProfile.monthlyLimitGB || 100;
           const pct = ((totalGB / limitGB) * 100).toFixed(1);
-          const downStr = formatSpeed(stats.downloadSpeed || 0, config.unitMode);
-          const upStr = formatSpeed(stats.uploadSpeed || 0, config.unitMode);
+          const downStr = formatSpeed(stats.downloadSpeed || 0, latestConfig.unitMode);
+          const upStr = formatSpeed(stats.uploadSpeed || 0, latestConfig.unitMode);
           const trayTooltipText = `돌핀 데이터 [${currentProfile.name || '메인 요금제'}]\n사용량: ${totalGB.toFixed(2)} / ${limitGB} GB (${pct}%)\n실시간: ↓ ${downStr} | ↑ ${upStr}`;
           updateTrayTooltip(trayTooltipText);
 
@@ -139,7 +179,8 @@ export default function App() {
                 profiles: updatedProfiles,
                 dailyHistory: updatedDaily
               };
-              saveConfig(updatedConfig);
+              // Mark as pending save (will be flushed every 10s)
+              pendingSaveRef.current = true;
               return updatedConfig;
             });
           }
@@ -157,17 +198,18 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [config.activeProfileId, activeProfile.selectedInterface, activeProfile.monthlyLimitGB, config.unitMode]);
+  }, []); // Empty dependency array: interval created once, reads configRef for latest state
 
-  const handleUpdateConfig = (newPartial) => {
+  // Saves config immediately for user-initiated actions (theme, settings, calibration)
+  const handleUpdateConfig = useCallback((newPartial) => {
     setConfig(prev => {
       const updated = typeof newPartial === 'function' ? newPartial(prev) : { ...prev, ...newPartial };
-      saveConfig(updated);
+      saveConfig(updated); // Immediate save for explicit user actions
       return updated;
     });
-  };
+  }, []);
 
-  const handleAccumulateProcesses = (list) => {
+  const handleAccumulateProcesses = useCallback((list) => {
     setConfig(prev => {
       const updatedCumul = { ...(prev.processCumulative || {}) };
       let changed = false;
@@ -187,12 +229,12 @@ export default function App() {
 
       if (!changed) return prev;
       const updated = { ...prev, processCumulative: updatedCumul };
-      saveConfig(updated);
+      pendingSaveRef.current = true; // Throttled save for high-frequency process accumulation
       return updated;
     });
-  };
+  }, []);
 
-  const handleUpdateActiveProfile = (profilePartial) => {
+  const handleUpdateActiveProfile = useCallback((profilePartial) => {
     setConfig(prev => {
       const updatedProfiles = (prev.profiles || []).map(p => {
         if (p.id === prev.activeProfileId) {
@@ -201,16 +243,16 @@ export default function App() {
         return p;
       });
       const updated = { ...prev, profiles: updatedProfiles };
-      saveConfig(updated);
+      saveConfig(updated); // Immediate save for explicit user calibration
       return updated;
     });
-  };
+  }, []);
 
-  const handleSwitchProfile = (profileId) => {
+  const handleSwitchProfile = useCallback((profileId) => {
     handleUpdateConfig({ activeProfileId: profileId });
-  };
+  }, [handleUpdateConfig]);
 
-  const handleAddProfile = (newProfile) => {
+  const handleAddProfile = useCallback((newProfile) => {
     setConfig(prev => {
       if ((prev.profiles || []).length >= 5) return prev;
       const updatedProfiles = [...(prev.profiles || []), newProfile];
@@ -218,9 +260,9 @@ export default function App() {
       saveConfig(updated);
       return updated;
     });
-  };
+  }, []);
 
-  const handleDeleteProfile = (profileId) => {
+  const handleDeleteProfile = useCallback((profileId) => {
     setConfig(prev => {
       const remaining = (prev.profiles || []).filter(p => p.id !== profileId);
       if (remaining.length === 0) return prev;
@@ -229,20 +271,20 @@ export default function App() {
       saveConfig(updated);
       return updated;
     });
-  };
+  }, []);
 
-  const handleSelectTheme = (themeName) => {
+  const handleSelectTheme = useCallback((themeName) => {
     handleUpdateConfig({ theme: themeName });
-  };
+  }, [handleUpdateConfig]);
 
-  const handleToggleMiniGadget = () => {
+  const handleToggleMiniGadget = useCallback(() => {
     handleUpdateConfig(prev => ({ miniMode: !prev.miniMode }));
-  };
+  }, [handleUpdateConfig]);
 
-  const handleOpenCalibrationFromMini = () => {
+  const handleOpenCalibrationFromMini = useCallback(() => {
     handleUpdateConfig({ miniMode: false });
     setShowCalibration(true);
-  };
+  }, [handleUpdateConfig]);
 
   // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
