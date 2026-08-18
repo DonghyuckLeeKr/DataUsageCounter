@@ -18,7 +18,7 @@ export default function TrafficTimeSeriesChart({ historyData, unitMode }) {
     // Find max value
     const maxVal = Math.max(
       100000, // min scale 100 KB/s
-      ...historyData.map(d => Math.max(d.downloadSpeed, d.uploadSpeed))
+      ...historyData.map(d => Math.max(d.downloadSpeed || 0, d.uploadSpeed || 0))
     );
 
     // Padding

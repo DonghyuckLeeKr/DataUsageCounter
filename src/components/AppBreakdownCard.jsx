@@ -223,7 +223,7 @@ export default function AppBreakdownCard({ config, onAccumulateProcesses, onRese
                   <ArrowDown size={10} color="var(--accent-blue)" /> 실시간
                 </span>
                 <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)' }}>
-                  {formatSpeed(proc.downloadSpeed, 'MBs')}
+                  {formatSpeed(proc.downloadSpeed, config?.unitMode || 'MBs')}
                 </span>
               </div>
 

@@ -1,26 +1,26 @@
 // Utility functions for formatting bytes, speeds, dates, and budget calculations
 
 export const formatBytes = (bytes, decimals = 2) => {
-  if (bytes === 0 || isNaN(bytes) || bytes === null) return '0.00 B';
+  if (!bytes || bytes <= 0 || isNaN(bytes) || bytes === null) return '0.00 B';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.min(sizes.length - 1, Math.max(0, Math.floor(Math.log(bytes) / Math.log(k))));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
 export const bytesToGB = (bytes) => {
-  if (!bytes) return 0;
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return 0;
   return bytes / (1024 * 1024 * 1024);
 };
 
 export const gbToBytes = (gb) => {
-  if (!gb) return 0;
+  if (!gb || gb <= 0 || isNaN(gb)) return 0;
   return gb * 1024 * 1024 * 1024;
 };
 
 export const formatSpeed = (bytesPerSec, unitMode = 'MBs') => {
-  if (!bytesPerSec || bytesPerSec <= 0) {
+  if (!bytesPerSec || bytesPerSec <= 0 || isNaN(bytesPerSec)) {
     return unitMode === 'Mbps' ? '0.00 Mbps' : '0.00 MB/s';
   }
 
@@ -47,25 +47,25 @@ export const getDaysRemainingInMonth = (resetDay = 1) => {
   const year = now.getFullYear();
   const month = now.getMonth();
 
+  const validResetDay = Math.min(31, Math.max(1, parseInt(resetDay, 10) || 1));
+
   // Last day of current month
   const lastDayOfCurrentMonth = new Date(year, month + 1, 0).getDate();
 
-  if (resetDay === 1) {
+  if (validResetDay === 1) {
     return Math.max(1, lastDayOfCurrentMonth - currentDay + 1);
   } else {
-    // Custom reset day logic
-    if (currentDay < resetDay) {
-      return resetDay - currentDay;
+    if (currentDay < validResetDay) {
+      return validResetDay - currentDay;
     } else {
-      const daysInNextMonth = new Date(year, month + 2, 0).getDate();
-      return (lastDayOfCurrentMonth - currentDay) + resetDay;
+      return (lastDayOfCurrentMonth - currentDay) + validResetDay;
     }
   }
 };
 
 export const calculateDailyBudget = (remainingGB, resetDay = 1) => {
-  const days = getDaysRemainingInMonth(resetDay);
-  if (remainingGB <= 0) return 0;
+  const days = Math.max(1, getDaysRemainingInMonth(resetDay));
+  if (!remainingGB || remainingGB <= 0 || isNaN(remainingGB)) return 0;
   return remainingGB / days;
 };
 

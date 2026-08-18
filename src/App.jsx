@@ -153,7 +153,7 @@ export default function App() {
                   };
                   // Check threshold push notification for this profile
                   const profileTotalGB = calculateTotalUsedGB(updatedP);
-                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name);
+                  checkAndNotifyThresholds(profileTotalGB, updatedP.monthlyLimitGB || 100, updatedP.name, updatedP.id);
                   return updatedP;
                 }
                 return p;

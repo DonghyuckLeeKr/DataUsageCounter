@@ -1,57 +1,78 @@
-import React, { useState } from 'react';
-import { X, Calendar, TrendingUp, BarChart3, Clock, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo, memo } from 'react';
+import { X, Calendar, BarChart3 } from 'lucide-react';
 import { getTodayKey } from '../services/storageService';
 
-export default function DailyHistoryModal({ config, activeProfile, onClose }) {
+function DailyHistoryModal({ config, activeProfile, onClose }) {
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'list'
-  const history = config.dailyHistory || {};
+  const history = config?.dailyHistory || {};
   const todayKey = getTodayKey();
 
   // Generate last 14 days dates array
-  const last14Days = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const dayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
-    const gb = parseFloat(history[key]) || 0;
-    last14Days.push({ key, label: dayLabel, gb, isToday: key === todayKey });
-  }
+  const last14Days = useMemo(() => {
+    const list = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+      const gb = parseFloat(history[key]) || 0;
+      list.push({ key, label: dayLabel, gb, isToday: key === todayKey });
+    }
+    return list;
+  }, [history, todayKey]);
 
   // Calculate statistics
-  const total14DaysGB = last14Days.reduce((acc, curr) => acc + curr.gb, 0);
-  const avgDailyGB = (total14DaysGB / 14);
-  const maxDay = [...last14Days].sort((a, b) => b.gb - a.gb)[0] || { label: '-', gb: 0 };
-  const maxChartGB = Math.max(1, ...last14Days.map(d => d.gb));
+  const total14DaysGB = useMemo(() => last14Days.reduce((acc, curr) => acc + curr.gb, 0), [last14Days]);
+  const avgDailyGB = total14DaysGB / 14;
+  const maxDay = useMemo(() => [...last14Days].sort((a, b) => b.gb - a.gb)[0] || { label: '-', gb: 0 }, [last14Days]);
+  const maxChartGB = useMemo(() => Math.max(1, ...last14Days.map(d => d.gb)), [last14Days]);
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.65)',
-      backdropFilter: 'blur(16px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '620px', padding: '26px', position: 'relative' }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(5, 10, 24, 0.82)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '16px'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '600px',
+          padding: '24px',
+          position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          background: 'var(--bg-primary)',
+          borderRadius: '16px',
+          border: '1px solid var(--glass-border)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)'
+        }}
+      >
         
         {/* Close Button */}
         <button
           onClick={onClose}
+          type="button"
           style={{
             position: 'absolute',
-            top: '20px',
-            right: '20px',
+            top: '18px',
+            right: '18px',
             background: 'none',
             border: 'none',
             color: 'var(--text-muted)',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            padding: '4px'
           }}
         >
           <X size={20} />
@@ -60,9 +81,9 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
         {/* Modal Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
             background: 'var(--brand-badge-bg)',
             border: '1px solid var(--brand-badge-border)',
             display: 'flex',
@@ -119,7 +140,8 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
                 padding: '4px 10px',
                 fontSize: '0.72rem',
                 background: viewMode === 'chart' ? 'var(--brand-badge-bg)' : undefined,
-                color: viewMode === 'chart' ? 'var(--brand-color)' : undefined
+                color: viewMode === 'chart' ? 'var(--brand-color)' : undefined,
+                cursor: 'pointer'
               }}
             >
               <BarChart3 size={13} />
@@ -132,7 +154,8 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
                 padding: '4px 10px',
                 fontSize: '0.72rem',
                 background: viewMode === 'list' ? 'var(--brand-badge-bg)' : undefined,
-                color: viewMode === 'list' ? 'var(--brand-color)' : undefined
+                color: viewMode === 'list' ? 'var(--brand-color)' : undefined,
+                cursor: 'pointer'
               }}
             >
               <Calendar size={13} />
@@ -146,7 +169,7 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
           <div className="glass-card" style={{ padding: '16px 14px', height: '180px', display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
             {last14Days.map((day, idx) => {
               const heightPct = Math.max(6, (day.gb / maxChartGB) * 100);
-              const isHigh = day.gb >= (config.dailySurgeLimitGB || 5);
+              const isHigh = day.gb >= (config?.dailySurgeLimitGB || 5);
 
               return (
                 <div
@@ -208,7 +231,7 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
                     {day.key} {day.isToday ? '(오늘)' : ''}
                   </span>
                 </div>
-                <span style={{ fontWeight: '700', color: day.gb >= (config.dailySurgeLimitGB || 5) ? 'var(--accent-rose)' : 'var(--text-main)' }}>
+                <span style={{ fontWeight: '700', color: day.gb >= (config?.dailySurgeLimitGB || 5) ? 'var(--accent-rose)' : 'var(--text-main)' }}>
                   {day.gb.toFixed(2)} GB
                 </span>
               </div>
@@ -218,7 +241,7 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-          <button onClick={onClose} className="glass-btn glass-btn-primary">
+          <button onClick={onClose} className="glass-btn glass-btn-primary" style={{ cursor: 'pointer' }}>
             닫기
           </button>
         </div>
@@ -227,3 +250,5 @@ export default function DailyHistoryModal({ config, activeProfile, onClose }) {
     </div>
   );
 }
+
+export default memo(DailyHistoryModal);

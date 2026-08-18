@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { X, Check, Edit3, RefreshCw, Radio, Sparkles } from 'lucide-react';
 import { detectLteRouterCarrier } from '../services/routerDetectionService';
 import { getBillingPeriod } from '../services/storageService';
 
-export default function CalibrationModal({ profile, onSave, onClose }) {
+function CalibrationModal({ profile, onSave, onClose }) {
   const [carrierInput, setCarrierInput] = useState(profile.carrierName || profile.name || '모바일 데이터 요금제');
   const [baselineInput, setBaselineInput] = useState(
     profile.initialBaselineGB !== undefined ? String(profile.initialBaselineGB) : '0'
@@ -59,54 +59,74 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
 
   const handleQuickZeroReset = () => {
     if (window.confirm('정말로 이 프로필의 사용량을 0 GB로 완전히 초기화하시겠습니까?')) {
+      const resetDay = profile.resetDay || 1;
       setBaselineInput('0');
       onSave({
         initialBaselineGB: 0,
-        sessionBytes: 0
+        sessionBytes: 0,
+        lastResetPeriod: getBillingPeriod(resetDay)
       });
       onClose();
     }
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.65)',
-      backdropFilter: 'blur(16px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(5, 10, 24, 0.82)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '16px'
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '520px',
+          padding: '26px',
+          position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          background: 'var(--bg-primary)',
+          borderRadius: '16px',
+          border: '1px solid var(--glass-border)',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7)'
+        }}
+      >
         
         {/* Close Button */}
         <button
           onClick={onClose}
+          type="button"
           style={{
             position: 'absolute',
-            top: '20px',
-            right: '20px',
+            top: '18px',
+            right: '18px',
             background: 'none',
             border: 'none',
             color: 'var(--text-muted)',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            padding: '4px'
           }}
         >
           <X size={20} />
         </button>
 
         {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
             background: 'var(--brand-badge-bg)',
             border: '1px solid var(--brand-badge-border)',
             display: 'flex',
@@ -117,10 +137,10 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
             <Edit3 size={20} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-main)' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
               '{profile.name || '요금제'}' 사용량 보정 & USIM 감지
             </h2>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               통신사 이름, 월간 한도, 현재 사용량을 직접 설정합니다.
             </p>
           </div>
@@ -131,18 +151,18 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
           <div style={{
             background: 'rgba(52, 211, 153, 0.1)',
             border: '1px solid rgba(52, 211, 153, 0.3)',
-            borderRadius: '12px',
-            padding: '12px 16px',
-            marginBottom: '16px',
-            fontSize: '0.8rem',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            marginBottom: '14px',
+            fontSize: '0.78rem',
             color: 'var(--text-main)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
           }}>
-            <Radio size={18} color="var(--accent-emerald)" />
+            <Radio size={16} color="var(--accent-emerald)" />
             <div>
-              <b>✨ LTE 라우터 USIM 자동 감지 성공!</b><br />
+              <b>LTE 라우터 USIM 자동 감지 성공!</b><br />
               게이트웨이: <code>{scanResult.gatewayIp}</code> | 신호: {scanResult.signalLevel}
             </div>
           </div>
@@ -153,7 +173,7 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
           {/* Carrier Name Input with Auto-Detect Button */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)' }}>
+              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)' }}>
                 요금제 / 회선 이름
               </label>
 
@@ -163,13 +183,14 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
                 disabled={scanning}
                 className="glass-btn"
                 style={{
-                  padding: '4px 10px',
-                  fontSize: '0.75rem',
+                  padding: '3px 8px',
+                  fontSize: '0.72rem',
                   borderColor: 'var(--brand-color)',
-                  color: 'var(--brand-color)'
+                  color: 'var(--brand-color)',
+                  cursor: 'pointer'
                 }}
               >
-                {scanning ? <RefreshCw size={13} className="spin" /> : <Sparkles size={13} />}
+                {scanning ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
                 <span>{scanning ? '라우터 조회 중...' : 'USIM 자동 감지'}</span>
               </button>
             </div>
@@ -186,7 +207,7 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
 
           {/* Baseline Input */}
           <div>
-            <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
               현재까지 사용한 데이터 수치 (GB 단위)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -194,20 +215,20 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
                 type="number"
                 step="0.01"
                 min="0"
-                max="1000"
+                max="2000"
                 value={baselineInput}
                 onChange={(e) => setBaselineInput(e.target.value)}
                 className="glass-input"
                 placeholder="예: 34.5"
                 required
               />
-              <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB</span>
             </div>
           </div>
 
           {/* Monthly Limit Input */}
           <div>
-            <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
               월간 데이터 총 한도 (GB)
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -215,20 +236,20 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
                 type="number"
                 step="1"
                 min="1"
-                max="2000"
+                max="5000"
                 value={limitInput}
                 onChange={(e) => setLimitInput(e.target.value)}
                 className="glass-input"
                 placeholder="100"
                 required
               />
-              <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>GB</span>
             </div>
           </div>
 
           {/* Reset Day Selector */}
           <div>
-            <label style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
               매월 자동 초기화(리셋) 일자
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -243,15 +264,15 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
                 placeholder="1"
                 required
               />
-              <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-muted)' }}>일</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)' }}>일</span>
             </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
               기본값: <b>매월 1일</b> 00:00시 자동 0 GB 초기화
             </span>
           </div>
 
           {/* Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', paddingTop: '16px', borderTop: '1px solid var(--glass-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', paddingTop: '14px', borderTop: '1px solid var(--glass-border)' }}>
             <button
               type="button"
               onClick={handleQuickZeroReset}
@@ -259,25 +280,25 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
                 background: 'rgba(244, 63, 94, 0.12)',
                 border: '1px solid rgba(244, 63, 94, 0.3)',
                 color: 'var(--accent-rose)',
-                padding: '10px 14px',
-                borderRadius: '10px',
-                fontSize: '0.8rem',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
                 fontWeight: '600'
               }}
             >
-              <RefreshCw size={14} />
+              <RefreshCw size={13} />
               <span>0 GB 초기화</span>
             </button>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="button" onClick={onClose} className="glass-btn">
+              <button type="button" onClick={onClose} className="glass-btn" style={{ cursor: 'pointer' }}>
                 취소
               </button>
-              <button type="submit" className="glass-btn glass-btn-primary">
+              <button type="submit" className="glass-btn glass-btn-primary" style={{ cursor: 'pointer' }}>
                 <Check size={16} />
                 <span>보정 저장하기</span>
               </button>
@@ -290,3 +311,5 @@ export default function CalibrationModal({ profile, onSave, onClose }) {
     </div>
   );
 }
+
+export default memo(CalibrationModal);
