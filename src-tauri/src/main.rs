@@ -1,12 +1,14 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use data_usage_counter::telemetry::{NetworkSampler, TelemetryData};
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use sysinfo::{Networks, System, Pid};
-use serde::{Serialize, Deserialize};
+use std::time::Instant;
+use sysinfo::{Pid, System};
 use tauri::{
-    State, SystemTray, SystemTrayMenu, SystemTrayMenuItem, CustomMenuItem,
-    SystemTrayEvent, Manager, WindowEvent, LogicalSize
+    CustomMenuItem, LogicalSize, Manager, State, SystemTray, SystemTrayEvent, SystemTrayMenu,
+    SystemTrayMenuItem, WindowEvent,
 };
 
 #[cfg(target_os = "windows")]
@@ -15,52 +17,38 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NetworkInterfaceInfo {
-    pub name: String,
-    pub rx_bytes: u64,
-    pub tx_bytes: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TelemetryData {
-    pub download_bytes_sec: u64,
-    pub upload_bytes_sec: u64,
-    pub total_rx_bytes: u64,
-    pub total_tx_bytes: u64,
-    pub interfaces: Vec<NetworkInterfaceInfo>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ProcessNetworkUsageInfo {
+pub struct ProcessActivityInfo {
     pub pid: u32,
     pub name: String,
-    pub download_speed_bytes: u64,
-    pub upload_speed_bytes: u64,
-    pub target_domain: String,
+    pub cpu_percent: f32,
+    pub memory_bytes: u64,
 }
 
 struct AppState {
-    networks: Arc<Mutex<Networks>>,
+    network_sampler: Arc<Mutex<NetworkSampler>>,
     sys: Arc<Mutex<System>>,
 }
 
 #[tauri::command]
 fn get_network_interfaces(state: State<AppState>) -> Vec<String> {
-    let mut nets = state.networks.lock().unwrap();
-    nets.refresh_list();
-    let mut names: Vec<String> = nets.iter().map(|(name, _)| name.clone()).collect();
-    names.insert(0, "ALL (전체 인터페이스)".to_string());
-    names
+    state.network_sampler.lock().unwrap().interface_names()
 }
 
 #[tauri::command]
 fn kill_process(target_pid: u32, state: State<AppState>) -> bool {
+    if target_pid == std::process::id() {
+        return false;
+    }
     let mut sys = state.sys.lock().unwrap();
     sys.refresh_processes();
 
     let pid = Pid::from(target_pid as usize);
     if let Some(process) = sys.process(pid) {
-        println!("[KillProcess] Terminating process {} (PID: {})", process.name(), target_pid);
+        println!(
+            "[KillProcess] Terminating process {} (PID: {})",
+            process.name(),
+            target_pid
+        );
         return process.kill();
     }
     false
@@ -72,27 +60,51 @@ fn update_tray_tooltip(tooltip: String, app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn set_auto_start(enable: bool) -> bool {
+fn set_auto_start(enable: bool) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         if let Ok(exe_path) = std::env::current_exe() {
             let exe_str = exe_path.to_string_lossy().to_string();
             if enable {
-                let _ = std::process::Command::new("reg")
-                    .args(&["add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "DolphinData", "/t", "REG_SZ", "/d", &format!("\"{}\"", exe_str), "/f"])
+                let output = std::process::Command::new("reg")
+                    .args(&[
+                        "add",
+                        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "/v",
+                        "DolphinData",
+                        "/t",
+                        "REG_SZ",
+                        "/d",
+                        &format!("\"{}\"", exe_str),
+                        "/f",
+                    ])
                     .creation_flags(CREATE_NO_WINDOW)
-                    .output();
-                return true;
+                    .output()
+                    .map_err(|error| error.to_string())?;
+                if !output.status.success() {
+                    return Err(String::from_utf8_lossy(&output.stderr).to_string());
+                }
+                return Ok(true);
             } else {
-                let _ = std::process::Command::new("reg")
-                    .args(&["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "DolphinData", "/f"])
+                let output = std::process::Command::new("reg")
+                    .args(&[
+                        "delete",
+                        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "/v",
+                        "DolphinData",
+                        "/f",
+                    ])
                     .creation_flags(CREATE_NO_WINDOW)
-                    .output();
-                return false;
+                    .output()
+                    .map_err(|error| error.to_string())?;
+                if !output.status.success() && get_auto_start() {
+                    return Err(String::from_utf8_lossy(&output.stderr).to_string());
+                }
+                return Ok(false);
             }
         }
     }
-    false
+    Err("자동 시작 설정은 Windows에서만 지원됩니다.".to_string())
 }
 
 #[tauri::command]
@@ -100,9 +112,15 @@ fn get_auto_start() -> bool {
     #[cfg(target_os = "windows")]
     {
         if let Ok(output) = std::process::Command::new("reg")
-            .args(&["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "DolphinData"])
+            .args(&[
+                "query",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                "DolphinData",
+            ])
             .creation_flags(CREATE_NO_WINDOW)
-            .output() {
+            .output()
+        {
             return output.status.success();
         }
     }
@@ -125,95 +143,80 @@ fn set_mini_mode(mini: bool, window: tauri::Window) {
 }
 
 #[tauri::command]
-fn get_top_processes(state: State<AppState>) -> Vec<ProcessNetworkUsageInfo> {
+fn get_top_processes(state: State<AppState>) -> Vec<ProcessActivityInfo> {
     let mut sys = state.sys.lock().unwrap();
     sys.refresh_processes();
 
-    let mut list: Vec<ProcessNetworkUsageInfo> = Vec::new();
+    let mut list: Vec<ProcessActivityInfo> = Vec::new();
 
     for (pid, process) in sys.processes() {
-        let name = process.name().to_lowercase();
         let cpu = process.cpu_usage();
         let mem = process.memory();
 
-        let domain = match name.as_str() {
-            n if n.contains("chrome") => "Google / YouTube (video.googlevideo.com)",
-            n if n.contains("edge") || n.contains("msedge") => "Microsoft Edge (azureedge.net)",
-            n if n.contains("steam") => "Steam Content CDN (steamcontent.com)",
-            n if n.contains("discord") => "Discord Voice Gateway (discord.gg)",
-            n if n.contains("svchost") => "Windows Update Service (delivery.mp.microsoft.com)",
-            n if n.contains("spotify") => "Spotify Audio Stream (audio-sp-ak.spotify.com)",
-            _ => "Active Local Host Connection"
-        };
-
         if cpu > 0.05 || mem > 30 * 1024 * 1024 {
-            let est_down = ((cpu as u64) * 95000).max(18000);
-            let est_up = ((cpu as u64) * 20000).max(4000);
-
-            list.push(ProcessNetworkUsageInfo {
+            list.push(ProcessActivityInfo {
                 pid: pid.as_u32(),
                 name: process.name().to_string(),
-                download_speed_bytes: est_down,
-                upload_speed_bytes: est_up,
-                target_domain: domain.to_string(),
+                cpu_percent: cpu,
+                memory_bytes: mem,
             });
         }
     }
 
-    list.sort_by(|a, b| b.download_speed_bytes.cmp(&a.download_speed_bytes));
-    list.truncate(6);
+    list.sort_by(|a, b| {
+        b.cpu_percent
+            .partial_cmp(&a.cpu_percent)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.memory_bytes.cmp(&a.memory_bytes))
+    });
+    list.truncate(12);
     list
 }
 
 #[tauri::command]
+fn run_ping_test(host: String) -> Result<u64, String> {
+    if host.is_empty()
+        || !host
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | ':' | '-'))
+    {
+        return Err("유효하지 않은 Ping 대상입니다.".to_string());
+    }
+
+    let mut command = std::process::Command::new("ping");
+    #[cfg(target_os = "windows")]
+    {
+        command.args(["-n", "1", "-w", "2000", &host]);
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        command.args(["-c", "1", "-W", "2", &host]);
+    }
+
+    let started = Instant::now();
+    let output = command.output().map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err("Ping 대상에서 응답을 받지 못했습니다.".to_string());
+    }
+    Ok(started.elapsed().as_millis().max(1) as u64)
+}
+
+#[tauri::command]
 fn get_realtime_stats(target_interface: String, state: State<AppState>) -> TelemetryData {
-    let mut nets = state.networks.lock().unwrap();
-    nets.refresh();
-
-    let mut current_rx_speed: u64 = 0;
-    let mut current_tx_speed: u64 = 0;
-    let mut total_rx: u64 = 0;
-    let mut total_tx: u64 = 0;
-    let mut interfaces_info = Vec::new();
-
-    for (name, network) in nets.iter() {
-        let rx_speed = network.received();
-        let tx_speed = network.transmitted();
-        let tot_rx = network.total_received();
-        let tot_tx = network.total_transmitted();
-
-        interfaces_info.push(NetworkInterfaceInfo {
-            name: name.clone(),
-            rx_bytes: tot_rx,
-            tx_bytes: tot_tx,
-        });
-
-        if target_interface == "ALL (전체 인터페이스)" || target_interface.is_empty() || *name == target_interface {
-            current_rx_speed += rx_speed;
-            current_tx_speed += tx_speed;
-            total_rx += tot_rx;
-            total_tx += tot_tx;
-        }
-    }
-
-    TelemetryData {
-        download_bytes_sec: current_rx_speed,
-        upload_bytes_sec: current_tx_speed,
-        total_rx_bytes: total_rx,
-        total_tx_bytes: total_tx,
-        interfaces: interfaces_info,
-    }
+    state
+        .network_sampler
+        .lock()
+        .unwrap()
+        .sample(&target_interface)
 }
 
 fn main() {
-    let mut networks = Networks::new_with_refreshed_list();
-    networks.refresh();
-
     let mut sys = System::new_all();
     sys.refresh_processes();
 
     let state = AppState {
-        networks: Arc::new(Mutex::new(networks)),
+        network_sampler: Arc::new(Mutex::new(NetworkSampler::new())),
         sys: Arc::new(Mutex::new(sys)),
     };
 
@@ -286,6 +289,7 @@ fn main() {
             get_realtime_stats,
             get_top_processes,
             kill_process,
+            run_ping_test,
             set_mini_mode,
             update_tray_tooltip,
             set_auto_start,

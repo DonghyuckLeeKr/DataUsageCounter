@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import {
   loadConfig,
   saveConfig,
   getActiveProfile,
   calculateTotalUsedGB,
   getTodayKey,
-  getTodayUsedGB
+  addDailyUsageBytes,
+  normalizeConfig,
+  rolloverBillingCycles
 } from './services/storageService';
 import {
   fetchRealtimeStats,
   isTauriAvailable,
-  fetchNetworkInterfaces,
   setWindowMiniMode,
   updateTrayTooltip
 } from './services/networkTelemetry';
@@ -37,7 +39,9 @@ export default function App() {
     uploadSpeed: 0,
     totalRx: 0,
     totalTx: 0,
-    interfaces: []
+    interfaces: [],
+    source: 'initializing',
+    error: ''
   });
   const [historyData, setHistoryData] = useState([]);
   const [showCalibration, setShowCalibration] = useState(false);
@@ -94,18 +98,14 @@ export default function App() {
     const listenTrayEvents = async () => {
       if (isTauriAvailable()) {
         try {
-          const eventPkg = '@tauri-apps/api/event';
-          const { listen } = await import(/* @vite-ignore */ eventPkg);
-          if (listen) {
-            unlisten = await listen('toggle-mini', (event) => {
-              const isMini = Boolean(event.payload);
-              setConfig(prev => {
-                const updated = { ...prev, miniMode: isMini };
-                saveConfig(updated);
-                return updated;
-              });
+          unlisten = await listen('toggle-mini', (event) => {
+            const isMini = Boolean(event.payload);
+            setConfig(prev => {
+              const updated = { ...prev, miniMode: isMini };
+              saveConfig(updated);
+              return updated;
             });
-          }
+          });
         } catch (e) {
           console.warn(e);
         }
@@ -126,7 +126,7 @@ export default function App() {
         const currentProfile = getActiveProfile(latestConfig);
         const stats = await fetchRealtimeStats(currentProfile.selectedInterface || 'ALL (전체 인터페이스)');
         if (stats) {
-          setTelemetry(stats);
+          setTelemetry({ ...stats, error: '' });
 
           // Update System Tray hover tooltip with real-time usage & speed
           const totalGB = calculateTotalUsedGB(currentProfile);
@@ -138,13 +138,24 @@ export default function App() {
           updateTrayTooltip(trayTooltipText);
 
           // Accumulate bytes into the active profile's sessionBytes and dailyHistory
-          const addedBytes = (stats.downloadSpeed || 0) + (stats.uploadSpeed || 0);
+          const addedBytes = stats.source === 'native'
+            ? (stats.receivedBytes || 0) + (stats.transmittedBytes || 0)
+            : 0;
+          if (stats.source === 'native') {
+            setConfig(prev => {
+              const rolledConfig = rolloverBillingCycles(prev);
+              if (rolledConfig === prev) return prev;
+              pendingSaveRef.current = true;
+              return rolledConfig;
+            });
+          }
           if (addedBytes > 0) {
             setConfig(prev => {
-              const activeId = prev.activeProfileId;
+              const rolledConfig = rolloverBillingCycles(prev);
+              const activeId = rolledConfig.activeProfileId;
               let targetProfileName = '요금제';
 
-              const updatedProfiles = (prev.profiles || []).map(p => {
+              const updatedProfiles = (rolledConfig.profiles || []).map(p => {
                 if (p.id === activeId) {
                   targetProfileName = p.name;
                   const updatedP = {
@@ -161,21 +172,18 @@ export default function App() {
 
               // Accumulate into dailyHistory
               const todayKey = getTodayKey();
-              const updatedDaily = { ...(prev.dailyHistory || {}) };
-              const addedGB = addedBytes / (1024 * 1024 * 1024);
-              const prevTodayGB = parseFloat(updatedDaily[todayKey]) || 0;
-              const newTodayGB = prevTodayGB + addedGB;
-              updatedDaily[todayKey] = parseFloat(newTodayGB.toFixed(4));
+              const configWithDailyUsage = addDailyUsageBytes(rolledConfig, activeId, todayKey, addedBytes);
+              const newTodayBytes = configWithDailyUsage.dailyHistoryByProfile[activeId][todayKey];
+              const newTodayGB = newTodayBytes / (1024 * 1024 * 1024);
 
               // Check daily surge limit notification
-              if (prev.alerts?.dailySurge !== false) {
-                checkAndNotifyDailySurge(newTodayGB, prev.dailySurgeLimitGB || 5, targetProfileName);
+              if (rolledConfig.alerts?.dailySurge !== false) {
+                checkAndNotifyDailySurge(newTodayGB, rolledConfig.dailySurgeLimitGB || 5, targetProfileName, activeId);
               }
 
               const updatedConfig = {
-                ...prev,
+                ...configWithDailyUsage,
                 profiles: updatedProfiles,
-                dailyHistory: updatedDaily
               };
               // Mark as pending save (will be flushed every 10s)
               pendingSaveRef.current = true;
@@ -192,6 +200,13 @@ export default function App() {
         }
       } catch (err) {
         console.error('Telemetry tick error in App.jsx', err);
+        setTelemetry(prev => ({
+          ...prev,
+          downloadSpeed: 0,
+          uploadSpeed: 0,
+          source: 'error',
+          error: err instanceof Error ? err.message : String(err)
+        }));
       }
     }, 1000);
 
@@ -205,31 +220,6 @@ export default function App() {
       const partial = typeof newPartial === 'function' ? newPartial(prev) : newPartial;
       const updated = { ...prev, ...partial };
       saveConfig(updated); // Immediate save for explicit user actions
-      return updated;
-    });
-  }, []);
-
-  const handleAccumulateProcesses = useCallback((list) => {
-    setConfig(prev => {
-      const updatedCumul = { ...(prev.processCumulative || {}) };
-      let changed = false;
-
-      list.forEach(p => {
-        const added = (p.downloadSpeed || 0) * 2;
-        if (added > 0) {
-          changed = true;
-          const pPrev = updatedCumul[p.name] || { bytes: 0, domain: p.targetDomain, lastSeen: '' };
-          updatedCumul[p.name] = {
-            bytes: (pPrev.bytes || 0) + added,
-            domain: p.targetDomain || pPrev.domain,
-            lastSeen: new Date().toISOString()
-          };
-        }
-      });
-
-      if (!changed) return prev;
-      const updated = { ...prev, processCumulative: updatedCumul };
-      pendingSaveRef.current = true; // Throttled save for high-frequency process accumulation
       return updated;
     });
   }, []);
@@ -382,9 +372,6 @@ export default function App() {
             />
             <PingTestCard />
             <AppBreakdownCard
-              config={config}
-              onAccumulateProcesses={handleAccumulateProcesses}
-              onResetCumulative={() => handleUpdateConfig({ processCumulative: {} })}
             />
           </div>
 
@@ -416,8 +403,9 @@ export default function App() {
           onSave={handleUpdateConfig}
           onSaveProfile={handleUpdateActiveProfile}
           onImportConfig={(newConfig) => {
-            setConfig(newConfig);
-            saveConfig(newConfig);
+            const normalized = rolloverBillingCycles(normalizeConfig(newConfig));
+            setConfig(normalized);
+            saveConfig(normalized);
           }}
           onClose={() => setShowSettings(false)}
         />

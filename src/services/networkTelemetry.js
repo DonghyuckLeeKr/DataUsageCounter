@@ -1,4 +1,6 @@
-// Telemetry service bridging Tauri Rust IPC and Web Simulation fallback
+// Telemetry service bridging Tauri Rust IPC and a non-persistent browser preview.
+
+import { invoke as tauriInvoke } from '@tauri-apps/api/tauri';
 
 export const isTauriAvailable = () => {
   return typeof window !== 'undefined' && (Boolean(window.__TAURI__) || Boolean(window.__TAURI_IPC__));
@@ -18,14 +20,7 @@ export const getTauriInvoke = async () => {
       return window.__TAURI__.invoke;
     }
   }
-  try {
-    const tauriPkg = '@tauri-apps/api/tauri';
-    const { invoke } = await import(/* @vite-ignore */ tauriPkg);
-    if (invoke) return invoke;
-  } catch (e) {
-    // ignore
-  }
-  return null;
+  return isTauriAvailable() ? tauriInvoke : null;
 };
 
 export const setWindowMiniMode = async (mini) => {
@@ -57,14 +52,9 @@ export const updateTrayTooltip = async (tooltipText) => {
 
 export const setAutoStart = async (enable) => {
   if (isTauriAvailable()) {
-    try {
-      const invoke = await getTauriInvoke();
-      if (invoke) {
-        return await invoke('set_auto_start', { enable: Boolean(enable) });
-      }
-    } catch (e) {
-      console.warn('Failed to set auto start via Tauri', e);
-    }
+    const invoke = await getTauriInvoke();
+    if (!invoke) throw new Error('Tauri IPC를 사용할 수 없습니다.');
+    return await invoke('set_auto_start', { enable: Boolean(enable) });
   }
   return false;
 };
@@ -114,22 +104,30 @@ export const fetchRealtimeStats = async (targetInterface = 'ALL (전체 인터�
           return {
             downloadSpeed: data.download_bytes_sec,
             uploadSpeed: data.upload_bytes_sec,
+            receivedBytes: data.rx_delta_bytes,
+            transmittedBytes: data.tx_delta_bytes,
+            sampleIntervalMs: data.sample_interval_ms,
             totalRx: data.total_rx_bytes,
             totalTx: data.total_tx_bytes,
+            source: 'native',
             interfaces: data.interfaces.map(i => ({
               name: i.name,
               rxBytes: i.rx_bytes,
-              txBytes: i.tx_bytes
+              txBytes: i.tx_bytes,
+              receivedBytes: i.rx_delta_bytes,
+              transmittedBytes: i.tx_delta_bytes
             }))
           };
         }
       }
     } catch (e) {
-      console.warn('Tauri get_realtime_stats failed, using sim', e);
+      throw new Error(`네이티브 네트워크 계측에 실패했습니다: ${e instanceof Error ? e.message : String(e)}`);
     }
+
+    throw new Error('네이티브 네트워크 계측 응답이 비어 있습니다.');
   }
 
-  // Simulation mode with dynamic natural variations
+  // Browser-only preview. App.jsx never persists these simulated values.
   const time = Date.now() / 1000;
   const isSurge = Math.sin(time / 8) > 0.6;
   const baseDown = isSurge ? 3.5 * 1024 * 1024 : 650 * 1024;
@@ -146,8 +144,12 @@ export const fetchRealtimeStats = async (targetInterface = 'ALL (전체 인터�
   return {
     downloadSpeed,
     uploadSpeed,
+    receivedBytes: downloadSpeed,
+    transmittedBytes: uploadSpeed,
+    sampleIntervalMs: 1000,
     totalRx: simState.totalRx,
     totalTx: simState.totalTx,
+    source: 'simulation',
     interfaces: [
       { name: 'Ethernet 2 (LG U+ LTE 라우터 USB)', rxBytes: simState.totalRx, txBytes: simState.totalTx },
       { name: 'Wi-Fi', rxBytes: 1024 * 1024 * 40, txBytes: 1024 * 1024 * 10 }
@@ -161,13 +163,12 @@ export const fetchTopProcesses = async () => {
       const invoke = await getTauriInvoke();
       if (invoke) {
         const list = await invoke('get_top_processes');
-        if (list && list.length > 0) {
+        if (Array.isArray(list)) {
           return list.map(p => ({
             pid: p.pid,
             name: p.name,
-            downloadSpeed: p.download_speed_bytes,
-            uploadSpeed: p.upload_speed_bytes,
-            targetDomain: p.target_domain
+            cpuPercent: p.cpu_percent,
+            memoryBytes: p.memory_bytes
           }));
         }
       }
@@ -176,12 +177,7 @@ export const fetchTopProcesses = async () => {
     }
   }
 
-  return [
-    { pid: 14220, name: 'chrome.exe', downloadSpeed: 1850000, uploadSpeed: 95000, targetDomain: 'Google / YouTube (video.googlevideo.com)' },
-    { pid: 8932, name: 'steam.exe', downloadSpeed: 920000, uploadSpeed: 45000, targetDomain: 'Steam Content CDN (steamcontent.com)' },
-    { pid: 1104, name: 'svchost.exe', downloadSpeed: 210000, uploadSpeed: 12000, targetDomain: 'Windows Update Service (delivery.mp.microsoft.com)' },
-    { pid: 7450, name: 'discord.exe', downloadSpeed: 45000, uploadSpeed: 18000, targetDomain: 'Discord Voice Gateway (discord.gg)' }
-  ];
+  return [];
 };
 
 export const terminateProcess = async (pid) => {
@@ -195,19 +191,30 @@ export const terminateProcess = async (pid) => {
       console.error('Tauri terminateProcess failed', e);
     }
   }
-  return true;
+  return false;
 };
 
 export const runPingTest = async (host = '8.8.8.8') => {
-  const start = performance.now();
-  try {
-    // Attempt rapid image/favicon fetch or simulated round-trip
-    await fetch(`https://${host}/favicon.ico?_t=${Date.now()}`, { mode: 'no-cors', cache: 'no-store' });
-  } catch (e) {
-    // Expected for no-cors/offline
+  if (isTauriAvailable()) {
+    const invoke = await getTauriInvoke();
+    if (!invoke) throw new Error('Tauri IPC를 사용할 수 없습니다.');
+    const pingMs = await invoke('run_ping_test', { host: String(host) });
+    return { pingMs: Number(pingMs) };
   }
-  const end = performance.now();
-  const elapsed = Math.round(end - start);
-  const clampedPing = Math.min(180, Math.max(18, elapsed > 500 ? 25 + Math.floor(Math.random() * 12) : elapsed));
-  return { pingMs: clampedPing };
+
+  const start = performance.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  try {
+    await fetch(`https://${host}/favicon.ico?_t=${Date.now()}`, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+  } catch (e) {
+    throw new Error(`네트워크 응답을 받지 못했습니다: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  return { pingMs: Math.max(1, Math.round(performance.now() - start)) };
 };

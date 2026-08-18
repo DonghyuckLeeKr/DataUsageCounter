@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Compass, TrendingUp, Zap } from 'lucide-react';
+import { Calendar, Compass, Zap } from 'lucide-react';
 import { calculateTotalUsedGB } from '../services/storageService';
 import { getDaysRemainingInMonth, calculateDailyBudget } from '../utils/formatters';
 

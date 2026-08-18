@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, TrendingDown, ExternalLink, ShieldAlert, Award, PiggyBank } from 'lucide-react';
+import { Sparkles, ExternalLink, ShieldAlert, Award, PiggyBank } from 'lucide-react';
 import { calculateTotalUsedGB } from '../services/storageService';
 
 export default function PlanRecommendationCard({ config }) {

@@ -43,24 +43,19 @@ export const formatSpeed = (bytesPerSec, unitMode = 'MBs') => {
 
 export const getDaysRemainingInMonth = (resetDay = 1) => {
   const now = new Date();
-  const currentDay = now.getDate();
   const year = now.getFullYear();
   const month = now.getMonth();
-
   const validResetDay = Math.min(31, Math.max(1, parseInt(resetDay, 10) || 1));
+  const today = new Date(year, month, now.getDate());
+  const currentMonthResetDay = Math.min(validResetDay, new Date(year, month + 1, 0).getDate());
+  let nextReset = new Date(year, month, currentMonthResetDay);
 
-  // Last day of current month
-  const lastDayOfCurrentMonth = new Date(year, month + 1, 0).getDate();
-
-  if (validResetDay === 1) {
-    return Math.max(1, lastDayOfCurrentMonth - currentDay + 1);
-  } else {
-    if (currentDay < validResetDay) {
-      return validResetDay - currentDay;
-    } else {
-      return (lastDayOfCurrentMonth - currentDay) + validResetDay;
-    }
+  if (today >= nextReset) {
+    const nextMonthLastDay = new Date(year, month + 2, 0).getDate();
+    nextReset = new Date(year, month + 1, Math.min(validResetDay, nextMonthLastDay));
   }
+
+  return Math.max(1, Math.round((nextReset - today) / 86400000));
 };
 
 export const calculateDailyBudget = (remainingGB, resetDay = 1) => {

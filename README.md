@@ -33,9 +33,10 @@ GitHub 릴리즈 페이지에서 최신 윈도우 설치 파일을 바로 다운
 ### 5. 일별 소비 캘린더 및 14일 통계 리포트
 - 최근 14일간의 일별 데이터 소비 추이 막대 차트, 일평균 사용량, 최대 소비일 분석 리포트를 제공합니다.
 
-### 6. 프로세스별 누적 데이터 사용량 추적 및 킬 스위치
-- 내 PC에서 데이터를 많이 사용하는 프로그램을 실시간으로 추적하고 누적 사용량을 합산합니다.
-- 트래픽을 과도하게 유발하는 프로세스를 원클릭으로 강제 종료할 수 있습니다.
+### 6. 활성 프로세스 리소스 확인 및 종료
+- 내 PC에서 CPU와 메모리를 많이 사용하는 활성 프로세스를 확인합니다.
+- 프로세스별 네트워크 사용량은 Windows의 별도 ETW 계측 없이는 정확히 산출할 수 있으므로 추정값을 표시하지 않습니다.
+- 사용자가 확인한 프로세스를 직접 종료할 수 있습니다.
 
 ### 7. Always-on-Top 미니 플로팅 가젯
 - 320x150 크기의 항상 위(Always-on-top) 미니 가젯으로 전환하여 작업 공간을 방해하지 않고 실시간 속도와 잔여량을 확인할 수 있습니다.
@@ -51,7 +52,7 @@ GitHub 릴리즈 페이지에서 최신 윈도우 설치 파일을 바로 다운
 
 ## 기술 스택
 
-- **Frontend**: React 18, Vite, Lucide Icons, Vanilla CSS
+- **Frontend**: React 19, Vite, Lucide Icons, Vanilla CSS
 - **Desktop Runtime**: Tauri (Rust)
 - **System Telemetry**: `sysinfo`, Windows Network Adapter Telemetry, Windows Registry API
 
@@ -62,6 +63,7 @@ GitHub 릴리즈 페이지에서 최신 윈도우 설치 파일을 바로 다운
 ### 요구 사항
 - Node.js 18 이상
 - Rust 1.70 이상 (Tauri 빌드 시 필요)
+- Windows에서는 Visual Studio 2022 Build Tools의 C++ 워크로드와 Windows 10/11 SDK
 
 ### 개발 서버 실행
 ```bash
@@ -80,8 +82,16 @@ npm run tauri build
 ```
 빌드가 완료되면 `src-tauri/target/release/bundle/nsis/` 경로에 `.exe` 설치 파일이 생성됩니다.
 
+업데이트 서명이 포함된 로컬 릴리스 빌드는 `./scripts/build-release.ps1`을 사용합니다. GitHub에서 `v*` 태그를 푸시하면 Windows 설치 파일과 `latest.json`을 자동 게시합니다. 세부 절차는 [Windows release checklist](docs/WINDOWS_RELEASE.md)를 참고하세요.
+
 ---
 
 ## 라이선스
 
-MIT License
+[MIT License](LICENSE)
+
+## 보안·개인정보·코드 서명
+
+- [Privacy policy](PRIVACY.md)
+- [Code signing policy](docs/CODE_SIGNING_POLICY.md)
+- [Windows release checklist](docs/WINDOWS_RELEASE.md)

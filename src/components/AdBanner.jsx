@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, ExternalLink, ShieldCheck, X } from 'lucide-react';
+import { Sparkles, ExternalLink, X } from 'lucide-react';
 
 export default function AdBanner({ config }) {
   const [closed, setClosed] = useState(false);

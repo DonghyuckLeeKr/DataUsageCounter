@@ -12,6 +12,13 @@ export default function Header({
   telemetry
 }) {
   const currentTheme = config.theme || 'soft-dark';
+  const telemetryLabel = telemetry?.source === 'native'
+    ? '실시간 모니터링 중'
+    : telemetry?.source === 'simulation'
+      ? '브라우저 미리보기 · 사용량 저장 안 함'
+      : telemetry?.source === 'error'
+        ? '계측 오류 · 사용량 누적 중지'
+        : '계측 준비 중';
 
   return (
     <header
@@ -55,7 +62,7 @@ export default function Header({
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
-              {activeProfile?.selectedInterface || 'ALL 인터페이스'} · 실시간 모니터링 중
+              {activeProfile?.selectedInterface || 'ALL 인터페이스'} · {telemetryLabel}
             </p>
           </div>
         </div>

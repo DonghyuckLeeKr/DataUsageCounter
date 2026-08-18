@@ -1,15 +1,25 @@
 [package]
 name = "data-usage-counter"
-version = "1.2.0"
+version = "1.2.1"
 description = "Dolphin Data - Real-time Network & LTE Data Monitor"
-authors = ["Antigravity"]
+authors = ["DolphinData contributors"]
 edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = [ "api-all", "system-tray", "notification"] }
+tauri = { version = "1.5", features = [ "window-close", "window-show", "window-set-size", "window-set-always-on-top",
+  "notification-all",
+  "shell-open",
+  "system-tray",
+  "updater",
+  "window-hide",
+  "window-maximize",
+  "window-minimize",
+  "window-start-dragging",
+  "window-unmaximize"
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sysinfo = "0.30"

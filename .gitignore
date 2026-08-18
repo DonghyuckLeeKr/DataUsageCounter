@@ -31,4 +31,5 @@ dist-isolation
 
 # Tauri / Rust build targets
 src-tauri/target/
-src-tauri/Cargo.lock
+# Local telemetry validation reports
+validation/

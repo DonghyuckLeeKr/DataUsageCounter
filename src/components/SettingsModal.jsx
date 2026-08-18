@@ -45,8 +45,15 @@ function SettingsModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Save auto-start in background without blocking
-    setAutoStart(autoStartEnabled).catch(err => console.warn(err));
+    try {
+      const actualAutoStart = await setAutoStart(autoStartEnabled);
+      if (actualAutoStart !== autoStartEnabled) {
+        throw new Error('운영체제 자동 시작 설정이 요청한 상태로 변경되지 않았습니다.');
+      }
+    } catch (error) {
+      alert(`자동 시작 설정을 저장하지 못했습니다.\n${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
 
     if (onSaveProfile) {
       onSaveProfile({ selectedInterface: selectedIf });
@@ -132,8 +139,8 @@ function SettingsModal({
         alert('설정 및 프로필 데이터를 성공적으로 불러왔습니다.');
         onClose();
       } catch (err) {
-        console.error('Failed to parse backup json', err);
-        alert('설정 파일을 읽는 중 오류가 발생했습니다. 올바른 JSON 파일인지 확인하세요.');
+        console.error('Failed to import backup json', err);
+        alert(`설정 파일을 불러올 수 없습니다.\n${err instanceof Error ? err.message : '올바른 JSON 파일인지 확인하세요.'}`);
       }
     };
     reader.readAsText(file);

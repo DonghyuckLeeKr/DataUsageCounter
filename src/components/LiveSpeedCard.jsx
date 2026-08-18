@@ -7,9 +7,9 @@ export default function LiveSpeedCard({ telemetry, unitMode }) {
   const [peakUp, setPeakUp] = useState(0);
 
   useEffect(() => {
-    if (telemetry.downloadSpeed > peakDown) setPeakDown(telemetry.downloadSpeed);
-    if (telemetry.uploadSpeed > peakUp) setPeakUp(telemetry.uploadSpeed);
-  }, [telemetry]);
+    setPeakDown(previous => Math.max(previous, telemetry.downloadSpeed || 0));
+    setPeakUp(previous => Math.max(previous, telemetry.uploadSpeed || 0));
+  }, [telemetry.downloadSpeed, telemetry.uploadSpeed]);
 
   return (
     <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>

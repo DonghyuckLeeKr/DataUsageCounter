@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowDown, ArrowUp, Maximize2, Edit3, X, Minus } from 'lucide-react';
+import { appWindow } from '@tauri-apps/api/window';
 import { calculateTotalUsedGB, getActiveProfile } from '../services/storageService';
 import { formatSpeed } from '../utils/formatters';
 
@@ -7,21 +8,13 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
   const activeProfile = getActiveProfile(config);
   const totalUsedGB = calculateTotalUsedGB(activeProfile);
   const limitGB = activeProfile.monthlyLimitGB || 100;
-  const remainingGB = Math.max(0, limitGB - totalUsedGB);
   const percentage = Math.min(100, Math.max(0, (totalUsedGB / limitGB) * 100));
 
   const getAppWindow = async () => {
     if (typeof window !== 'undefined' && window.__TAURI__?.window?.appWindow) {
       return window.__TAURI__.window.appWindow;
     }
-    try {
-      const winPkg = '@tauri-apps/api/window';
-      const { appWindow } = await import(/* @vite-ignore */ winPkg);
-      if (appWindow) return appWindow;
-    } catch (e) {
-      console.warn('Failed to import Tauri appWindow', e);
-    }
-    return null;
+    return appWindow;
   };
 
   const handleMinimize = async (e) => {

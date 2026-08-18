@@ -1,10 +1,13 @@
 import React, { useState, useMemo, memo } from 'react';
 import { X, Calendar, BarChart3 } from 'lucide-react';
-import { getTodayKey } from '../services/storageService';
+import { getDailyHistoryGB, getTodayKey } from '../services/storageService';
 
 function DailyHistoryModal({ config, activeProfile, onClose }) {
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'list'
-  const history = config?.dailyHistory || {};
+  const history = useMemo(
+    () => getDailyHistoryGB(config, activeProfile?.id),
+    [config, activeProfile?.id]
+  );
   const todayKey = getTodayKey();
 
   // Generate last 14 days dates array

@@ -4,14 +4,23 @@ import { runPingTest } from '../services/networkTelemetry';
 
 export default function PingTestCard() {
   const [testing, setTesting] = useState(false);
-  const [pingResult, setPingResult] = useState({ pingMs: 28, jitterMs: 3, status: '우수 (Excellent)' });
+  const [pingResult, setPingResult] = useState(null);
+  const [error, setError] = useState('');
 
   const handleRunPing = async () => {
     setTesting(true);
+    setError('');
     const results = [];
-    for (let i = 0; i < 4; i++) {
-      const res = await runPingTest('8.8.8.8');
-      results.push(res.pingMs);
+    try {
+      for (let i = 0; i < 4; i++) {
+        const res = await runPingTest('8.8.8.8');
+        results.push(res.pingMs);
+      }
+    } catch (pingError) {
+      setPingResult(null);
+      setError(pingError instanceof Error ? pingError.message : String(pingError));
+      setTesting(false);
+      return;
     }
     setTesting(false);
 
@@ -53,21 +62,21 @@ export default function PingTestCard() {
         <div style={{ background: 'var(--glass-card)', padding: '14px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--glass-border-light)' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>평균 Ping</span>
           <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--accent-emerald)' }}>
-            {pingResult.pingMs} <span style={{ fontSize: '0.8rem' }}>ms</span>
+            {pingResult ? pingResult.pingMs : '--'} <span style={{ fontSize: '0.8rem' }}>ms</span>
           </div>
         </div>
 
         <div style={{ background: 'var(--glass-card)', padding: '14px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--glass-border-light)' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Jitter (변동)</span>
           <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--accent-blue)' }}>
-            {pingResult.jitterMs} <span style={{ fontSize: '0.8rem' }}>ms</span>
+            {pingResult ? pingResult.jitterMs : '--'} <span style={{ fontSize: '0.8rem' }}>ms</span>
           </div>
         </div>
 
         <div style={{ background: 'var(--glass-card)', padding: '14px', borderRadius: '12px', textAlign: 'center', border: '1px solid var(--glass-border-light)' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>네트워크 상태</span>
           <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', marginTop: '6px' }}>
-            {pingResult.status}
+            {error || pingResult?.status || '측정 전'}
           </div>
         </div>
       </div>

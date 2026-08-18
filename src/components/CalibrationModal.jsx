@@ -20,12 +20,19 @@ function CalibrationModal({ profile, onSave, onClose }) {
   const handleAutoDetect = async () => {
     setScanning(true);
     setScanResult(null);
-    const result = await detectLteRouterCarrier();
-    setScanning(false);
-
-    if (result && result.detected) {
+    try {
+      const result = await detectLteRouterCarrier();
       setScanResult(result);
-      setCarrierInput(result.carrierName.replace(' (USIM 감지완료)', '').replace(' (자동 감지됨)', ''));
+      if (result.detected && result.carrierName) {
+        setCarrierInput(result.carrierName);
+      }
+    } catch (error) {
+      setScanResult({
+        detected: false,
+        message: error instanceof Error ? error.message : '라우터 검색 중 오류가 발생했습니다.'
+      });
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -138,7 +145,7 @@ function CalibrationModal({ profile, onSave, onClose }) {
           </div>
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>
-              '{profile.name || '요금제'}' 사용량 보정 & USIM 감지
+              '{profile.name || '요금제'}' 사용량 보정 & 라우터 검색
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               통신사 이름, 월간 한도, 현재 사용량을 직접 설정합니다.
@@ -149,8 +156,8 @@ function CalibrationModal({ profile, onSave, onClose }) {
         {/* Scan Result Notification */}
         {scanResult && (
           <div style={{
-            background: 'rgba(52, 211, 153, 0.1)',
-            border: '1px solid rgba(52, 211, 153, 0.3)',
+            background: scanResult.detected ? 'rgba(52, 211, 153, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+            border: `1px solid ${scanResult.detected ? 'rgba(52, 211, 153, 0.3)' : 'rgba(244, 63, 94, 0.3)'}`,
             borderRadius: '10px',
             padding: '10px 14px',
             marginBottom: '14px',
@@ -160,10 +167,11 @@ function CalibrationModal({ profile, onSave, onClose }) {
             alignItems: 'center',
             gap: '10px'
           }}>
-            <Radio size={16} color="var(--accent-emerald)" />
+            <Radio size={16} color={scanResult.detected ? 'var(--accent-emerald)' : 'var(--accent-rose)'} />
             <div>
-              <b>LTE 라우터 USIM 자동 감지 성공!</b><br />
-              게이트웨이: <code>{scanResult.gatewayIp}</code> | 신호: {scanResult.signalLevel}
+              <b>{scanResult.detected ? 'LTE 라우터 게이트웨이 응답 확인' : '라우터를 찾지 못했습니다'}</b><br />
+              {scanResult.detected && <>게이트웨이: <code>{scanResult.gatewayIp}</code><br /></>}
+              {scanResult.message}
             </div>
           </div>
         )}
@@ -191,7 +199,7 @@ function CalibrationModal({ profile, onSave, onClose }) {
                 }}
               >
                 {scanning ? <RefreshCw size={12} className="spin" /> : <Sparkles size={12} />}
-                <span>{scanning ? '라우터 조회 중...' : 'USIM 자동 감지'}</span>
+                <span>{scanning ? '라우터 조회 중...' : '라우터 검색'}</span>
               </button>
             </div>
 

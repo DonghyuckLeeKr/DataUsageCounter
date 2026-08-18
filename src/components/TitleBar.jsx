@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Minus, Square, Copy, X } from 'lucide-react';
+import { appWindow } from '@tauri-apps/api/window';
 
 export default function TitleBar({ title = "돌핀 데이터 (Dolphin Data)" }) {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -8,14 +9,7 @@ export default function TitleBar({ title = "돌핀 데이터 (Dolphin Data)" }) 
     if (typeof window !== 'undefined' && window.__TAURI__?.window?.appWindow) {
       return window.__TAURI__.window.appWindow;
     }
-    try {
-      const winPkg = '@tauri-apps/api/window';
-      const { appWindow } = await import(/* @vite-ignore */ winPkg);
-      if (appWindow) return appWindow;
-    } catch (e) {
-      console.warn('Failed to import Tauri appWindow', e);
-    }
-    return null;
+    return appWindow;
   };
 
   const handleMinimize = async (e) => {

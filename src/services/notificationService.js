@@ -1,17 +1,17 @@
 // Notification service for desktop push notifications with per-profile tracking (Tauri & Web fallback)
 
 import { isTauriAvailable } from './networkTelemetry';
+import { sendNotification, isPermissionGranted, requestPermission } from '@tauri-apps/api/notification';
+import { getTodayKey } from './storageService';
 
 // Per-profile threshold tracking: { 'profile-1': { t80: false, t90: false, t95: false } }
 const profileNotifiedThresholds = {};
 
-let lastDailyNotifiedDate = '';
+const lastDailyNotifiedDateByProfile = {};
 
 export const sendOSNotification = async (title, body) => {
   if (isTauriAvailable()) {
     try {
-      const notifPkg = '@tauri-apps/api/notification';
-      const { sendNotification, isPermissionGranted, requestPermission } = await import(/* @vite-ignore */ notifPkg);
       let permission = await isPermissionGranted();
       if (!permission) {
         permission = await requestPermission() === 'granted';
@@ -39,12 +39,12 @@ export const sendOSNotification = async (title, body) => {
   }
 };
 
-export const checkAndNotifyDailySurge = (todayGB, dailyLimitGB, profileName) => {
+export const checkAndNotifyDailySurge = (todayGB, dailyLimitGB, profileName, profileId = 'default') => {
   if (!dailyLimitGB || dailyLimitGB <= 0) return;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayKey();
 
-  if (todayGB >= dailyLimitGB && lastDailyNotifiedDate !== todayStr) {
-    lastDailyNotifiedDate = todayStr;
+  if (todayGB >= dailyLimitGB && lastDailyNotifiedDateByProfile[profileId] !== todayStr) {
+    lastDailyNotifiedDateByProfile[profileId] = todayStr;
     sendOSNotification(
       `[일일 데이터 초과 경고] ${profileName || '요금제'}`,
       `오늘 하루 설정한 한도(${dailyLimitGB} GB)를 초과했습니다 (현재 ${todayGB.toFixed(2)} GB). 백그라운드 다운로드를 점검하세요.`

@@ -4,20 +4,20 @@
     "beforeBuildCommand": "npm run build",
     "devPath": "http://localhost:5173",
     "distDir": "../dist",
-    "withGlobalTauri": true
+    "withGlobalTauri": false
   },
   "package": {
     "productName": "DolphinData",
-    "version": "1.2.0"
+    "version": "1.2.1"
   },
   "tauri": {
     "allowlist": {
-      "all": true,
+      "all": false,
       "notification": {
         "all": true
       },
       "window": {
-        "all": true,
+        "all": false,
         "setAlwaysOnTop": true,
         "setSize": true,
         "show": true,
@@ -27,12 +27,15 @@
         "maximize": true,
         "unmaximize": true,
         "startDragging": true
+      },
+      "shell": {
+        "open": true
       }
     },
     "bundle": {
       "active": true,
       "category": "Utility",
-      "copyright": "",
+      "copyright": "Copyright © 2026 DolphinData contributors",
       "externalBin": [],
       "icon": [
         "icons/32x32.png",
@@ -47,11 +50,22 @@
       "targets": "all"
     },
     "security": {
-      "csp": null
+      "csp": "default-src 'self' tauri:; img-src 'self' asset: data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost http://192.168.0.1 http://192.168.1.1 http://192.168.8.1 http://192.168.100.1"
+    },
+    "updater": {
+      "active": true,
+      "dialog": true,
+      "endpoints": [
+        "https://github.com/DonghyuckLeeKr/DolphinData/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxNjhBNzM2Q0Y1MEFDQ0MKUldUTXJGRFBOcWRvc1lRRk9Mb1VGR3hHZVBsNlYrTGR6M0Z0OFdVazVDaEZPak42aEp4dHFObkoK",
+      "windows": {
+        "installMode": "passive"
+      }
     },
     "systemTray": {
       "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
+      "iconAsTemplate": false,
       "menuOnLeftClick": false
     },
     "windows": [
