@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use data_usage_counter::network_identity::{detect_current_network_identity, NetworkIdentity};
 use data_usage_counter::telemetry::{NetworkSampler, TelemetryData};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -32,6 +33,13 @@ struct AppState {
 #[tauri::command]
 fn get_network_interfaces(state: State<AppState>) -> Vec<String> {
     state.network_sampler.lock().unwrap().interface_names()
+}
+
+#[tauri::command]
+async fn get_current_network_identity() -> Result<NetworkIdentity, String> {
+    tauri::async_runtime::spawn_blocking(detect_current_network_identity)
+        .await
+        .map_err(|error| format!("네트워크 식별 작업에 실패했습니다: {error}"))?
 }
 
 #[tauri::command]
@@ -67,7 +75,7 @@ fn set_auto_start(enable: bool) -> Result<bool, String> {
             let exe_str = exe_path.to_string_lossy().to_string();
             if enable {
                 let output = std::process::Command::new("reg")
-                    .args(&[
+                    .args([
                         "add",
                         "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
                         "/v",
@@ -87,7 +95,7 @@ fn set_auto_start(enable: bool) -> Result<bool, String> {
                 return Ok(true);
             } else {
                 let output = std::process::Command::new("reg")
-                    .args(&[
+                    .args([
                         "delete",
                         "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
                         "/v",
@@ -112,7 +120,7 @@ fn get_auto_start() -> bool {
     #[cfg(target_os = "windows")]
     {
         if let Ok(output) = std::process::Command::new("reg")
-            .args(&[
+            .args([
                 "query",
                 "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
                 "/v",
@@ -276,16 +284,16 @@ fn main() {
             },
             _ => {}
         })
-        .on_window_event(|event| match event.event() {
-            WindowEvent::CloseRequested { api, .. } => {
+        .on_window_event(|event| {
+            if let WindowEvent::CloseRequested { api, .. } = event.event() {
                 // Intercept close button to hide window to system tray
                 api.prevent_close();
                 let _ = event.window().hide();
             }
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             get_network_interfaces,
+            get_current_network_identity,
             get_realtime_stats,
             get_top_processes,
             kill_process,

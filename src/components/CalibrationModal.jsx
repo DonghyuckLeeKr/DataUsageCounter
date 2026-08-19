@@ -51,7 +51,8 @@ function CalibrationModal({ profile, onSave, onClose }) {
       initialBaselineGB: Math.max(0, parsedBaseline),
       monthlyLimitGB: Math.max(1, parsedLimit),
       resetDay: parsedResetDay,
-      lastResetPeriod: getBillingPeriod(parsedResetDay)
+      lastResetPeriod: getBillingPeriod(parsedResetDay),
+      needsRegistration: false
     };
 
     // Only reset sessionBytes when user actually changed the baseline calibration value
@@ -177,6 +178,21 @@ function CalibrationModal({ profile, onSave, onClose }) {
         )}
 
         <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {profile.networkFingerprint && (
+            <div style={{
+              padding: '10px 12px',
+              borderRadius: '10px',
+              background: 'rgba(14, 165, 233, 0.08)',
+              border: '1px solid rgba(14, 165, 233, 0.22)',
+              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+              lineHeight: 1.55
+            }}>
+              자동 인식 네트워크: <b style={{ color: 'var(--text-main)' }}>{profile.networkName || profile.name}</b><br />
+              이 네트워크에 다시 연결하면 해당 프로필로 자동 전환됩니다.
+            </div>
+          )}
           
           {/* Carrier Name Input with Auto-Detect Button */}
           <div>

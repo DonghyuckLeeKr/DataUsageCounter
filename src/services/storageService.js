@@ -3,6 +3,23 @@
 const STORAGE_KEY = 'data_usage_counter_v1_config';
 const BACKUP_KEY = 'data_usage_counter_v1_backup';
 const BYTES_PER_GB = 1024 * 1024 * 1024;
+export const MAX_PROFILES = 20;
+export const MAX_DAILY_HISTORY_ENTRIES = 1000;
+
+const MAX_TEXT_LENGTHS = {
+  id: 128,
+  name: 100,
+  carrierName: 100,
+  lastResetPeriod: 32,
+  selectedInterface: 256,
+  networkFingerprint: 128,
+  networkName: 128,
+  networkIdentityKind: 32,
+  interfaceDescription: 256,
+  icon: 16
+};
+
+const ALLOWED_THEMES = new Set(['soft-dark', 'midnight-black', 'nordic-light', 'neon-cyber']);
 
 export const DEFAULT_PROFILE = {
   id: 'profile-1',
@@ -14,6 +31,12 @@ export const DEFAULT_PROFILE = {
   resetDay: 1,
   lastResetPeriod: '',
   selectedInterface: 'ALL (전체 인터페이스)',
+  networkFingerprint: '',
+  networkName: '',
+  networkIdentityKind: '',
+  interfaceDescription: '',
+  profileOrigin: 'manual',
+  needsRegistration: false,
   icon: '📱'
 };
 
@@ -62,37 +85,89 @@ const createDefaultConfig = () => ({
   lastUpdated: new Date().toISOString()
 });
 
+const normalizeText = (value, fallback, maxLength) => {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, maxLength) : fallback;
+};
+
+const normalizeNumber = (value, fallback, min, max) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+};
+
+const normalizeProfileId = (value, fallback) => {
+  const id = normalizeText(value, fallback, MAX_TEXT_LENGTHS.id);
+  if (!/^[a-zA-Z0-9._:-]+$/.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) {
+    return fallback;
+  }
+  return id;
+};
+
+const isValidDateKey = (dateKey) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!match) return false;
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+};
+
 const normalizeProfile = (profile, index) => {
   const fallbackId = `profile-${index + 1}`;
   const resetDay = Math.min(31, Math.max(1, parseInt(profile?.resetDay, 10) || 1));
   return {
-    ...DEFAULT_PROFILE,
-    ...profile,
-    id: typeof profile?.id === 'string' && profile.id.trim() ? profile.id : fallbackId,
-    name: typeof profile?.name === 'string' && profile.name.trim() ? profile.name : `요금제 ${index + 1}`,
-    carrierName: typeof profile?.carrierName === 'string' ? profile.carrierName : '',
-    monthlyLimitGB: Math.max(1, Number(profile?.monthlyLimitGB) || 100),
-    initialBaselineGB: Math.max(0, Number(profile?.initialBaselineGB) || 0),
-    sessionBytes: Math.max(0, Math.round(Number(profile?.sessionBytes) || 0)),
+    id: normalizeProfileId(profile?.id, fallbackId),
+    name: normalizeText(profile?.name, `요금제 ${index + 1}`, MAX_TEXT_LENGTHS.name),
+    carrierName: normalizeText(profile?.carrierName, '', MAX_TEXT_LENGTHS.carrierName),
+    monthlyLimitGB: normalizeNumber(profile?.monthlyLimitGB, 100, 1, 5000),
+    initialBaselineGB: normalizeNumber(profile?.initialBaselineGB, 0, 0, 1_000_000),
+    sessionBytes: Math.round(normalizeNumber(profile?.sessionBytes, 0, 0, Number.MAX_SAFE_INTEGER)),
     resetDay,
-    lastResetPeriod: typeof profile?.lastResetPeriod === 'string' ? profile.lastResetPeriod : '',
-    selectedInterface: typeof profile?.selectedInterface === 'string' && profile.selectedInterface
-      ? profile.selectedInterface
-      : DEFAULT_PROFILE.selectedInterface
+    lastResetPeriod: normalizeText(profile?.lastResetPeriod, '', MAX_TEXT_LENGTHS.lastResetPeriod),
+    selectedInterface: normalizeText(
+      profile?.selectedInterface,
+      DEFAULT_PROFILE.selectedInterface,
+      MAX_TEXT_LENGTHS.selectedInterface
+    ),
+    networkFingerprint: normalizeText(profile?.networkFingerprint, '', MAX_TEXT_LENGTHS.networkFingerprint),
+    networkName: normalizeText(profile?.networkName, '', MAX_TEXT_LENGTHS.networkName),
+    networkIdentityKind: normalizeText(profile?.networkIdentityKind, '', MAX_TEXT_LENGTHS.networkIdentityKind),
+    interfaceDescription: normalizeText(profile?.interfaceDescription, '', MAX_TEXT_LENGTHS.interfaceDescription),
+    profileOrigin: profile?.profileOrigin === 'auto-network' ? 'auto-network' : 'manual',
+    needsRegistration: Boolean(profile?.needsRegistration),
+    icon: normalizeText(profile?.icon, DEFAULT_PROFILE.icon, MAX_TEXT_LENGTHS.icon)
   };
 };
 
-const normalizeDailyHistory = (value) => {
+const normalizeHistoryEntries = (value, multiplier = 1) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([dateKey, amount]) => {
+        const numericAmount = Number(amount);
+        return isValidDateKey(dateKey)
+          && Number.isFinite(numericAmount)
+          && numericAmount >= 0;
+      })
+      .sort(([left], [right]) => right.localeCompare(left))
+      .slice(0, MAX_DAILY_HISTORY_ENTRIES)
+      .map(([dateKey, amount]) => [
+        dateKey,
+        Math.round(normalizeNumber(Number(amount) * multiplier, 0, 0, Number.MAX_SAFE_INTEGER))
+      ])
+  );
+};
+
+const normalizeDailyHistory = (value, profileIds) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result = {};
-  for (const [profileId, history] of Object.entries(value)) {
-    if (!history || typeof history !== 'object' || Array.isArray(history)) continue;
-    result[profileId] = {};
-    for (const [dateKey, bytes] of Object.entries(history)) {
-      const numericBytes = Number(bytes);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey) && Number.isFinite(numericBytes) && numericBytes >= 0) {
-        result[profileId][dateKey] = Math.round(numericBytes);
-      }
+  for (const profileId of profileIds) {
+    const history = normalizeHistoryEntries(value[profileId]);
+    if (Object.keys(history).length > 0) {
+      result[profileId] = history;
     }
   }
   return result;
@@ -106,7 +181,7 @@ export const normalizeConfig = (input) => {
   const defaults = createDefaultConfig();
   let profiles;
   if (Array.isArray(input.profiles) && input.profiles.length > 0) {
-    profiles = input.profiles.slice(0, 5).map(normalizeProfile);
+    profiles = input.profiles.slice(0, MAX_PROFILES).map(normalizeProfile);
   } else if (input.monthlyLimitGB !== undefined || input.carrierName !== undefined) {
     profiles = [normalizeProfile({
       id: 'profile-1',
@@ -124,32 +199,32 @@ export const normalizeConfig = (input) => {
 
   const profileIds = new Set(profiles.map(profile => profile.id));
   const activeProfileId = profileIds.has(input.activeProfileId) ? input.activeProfileId : profiles[0].id;
-  let dailyHistoryByProfile = normalizeDailyHistory(input.dailyHistoryByProfile);
+  let dailyHistoryByProfile = normalizeDailyHistory(input.dailyHistoryByProfile, profileIds);
 
   if (Object.keys(dailyHistoryByProfile).length === 0 && input.dailyHistory && typeof input.dailyHistory === 'object') {
-    dailyHistoryByProfile = { [activeProfileId]: {} };
-    for (const [dateKey, gb] of Object.entries(input.dailyHistory)) {
-      const numericGB = Number(gb);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey) && Number.isFinite(numericGB) && numericGB >= 0) {
-        dailyHistoryByProfile[activeProfileId][dateKey] = Math.round(numericGB * BYTES_PER_GB);
-      }
-    }
+    dailyHistoryByProfile = {
+      [activeProfileId]: normalizeHistoryEntries(input.dailyHistory, BYTES_PER_GB)
+    };
   }
 
   return {
-    ...defaults,
-    ...input,
     activeProfileId,
     profiles,
     unitMode: input.unitMode === 'Mbps' ? 'Mbps' : 'MBs',
-    theme: typeof input.theme === 'string' ? input.theme : defaults.theme,
+    theme: ALLOWED_THEMES.has(input.theme) ? input.theme : defaults.theme,
     miniMode: Boolean(input.miniMode),
     autoStart: Boolean(input.autoStart),
-    dailySurgeLimitGB: Math.max(0.5, Number(input.dailySurgeLimitGB) || 5),
+    dailySurgeLimitGB: normalizeNumber(input.dailySurgeLimitGB, 5, 0.5, 100),
     dailyHistoryByProfile,
-    alerts: { ...defaults.alerts, ...(input.alerts || {}) },
-    dailyHistory: undefined,
-    processCumulative: undefined
+    alerts: {
+      t80: typeof input.alerts?.t80 === 'boolean' ? input.alerts.t80 : defaults.alerts.t80,
+      t90: typeof input.alerts?.t90 === 'boolean' ? input.alerts.t90 : defaults.alerts.t90,
+      t95: typeof input.alerts?.t95 === 'boolean' ? input.alerts.t95 : defaults.alerts.t95,
+      dailySurge: typeof input.alerts?.dailySurge === 'boolean'
+        ? input.alerts.dailySurge
+        : defaults.alerts.dailySurge
+    },
+    lastUpdated: normalizeText(input.lastUpdated, defaults.lastUpdated, 64)
   };
 };
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Plus, Trash2, Edit3 } from 'lucide-react';
-import { calculateTotalUsedGB, getBillingPeriod } from '../services/storageService';
+import { Plus, Trash2, Edit3, AlertCircle } from 'lucide-react';
+import { calculateTotalUsedGB, getBillingPeriod, MAX_PROFILES } from '../services/storageService';
 
 export default function ProfileTabBar({
   config,
@@ -13,8 +13,8 @@ export default function ProfileTabBar({
   const activeId = config.activeProfileId;
 
   const handleAdd = () => {
-    if (profiles.length >= 5) {
-      alert('요금제 프로필은 최대 5개까지 등록할 수 있습니다.');
+    if (profiles.length >= MAX_PROFILES) {
+      alert(`요금제 프로필은 최대 ${MAX_PROFILES}개까지 등록할 수 있습니다.`);
       return;
     }
     const newIndex = profiles.length + 1;
@@ -27,7 +27,9 @@ export default function ProfileTabBar({
       sessionBytes: 0,
       resetDay: 1,
       lastResetPeriod: getBillingPeriod(1),
-      selectedInterface: 'ALL (전체 인터페이스)'
+      selectedInterface: 'ALL (전체 인터페이스)',
+      profileOrigin: 'manual',
+      needsRegistration: false
     };
     onAddProfile(newProfile);
   };
@@ -43,7 +45,7 @@ export default function ProfileTabBar({
         flexWrap: 'wrap'
       }}
     >
-      {/* Left Tabs (Up to 5 profiles) */}
+      {/* Network and manually-created profile tabs */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {profiles.map((profile, idx) => {
           const isActive = profile.id === activeId;
@@ -71,13 +73,36 @@ export default function ProfileTabBar({
               title={`${profile.name} (${profile.selectedInterface || '전체'})`}
             >
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{
-                  fontSize: '0.82rem',
-                  fontWeight: isActive ? '700' : '500',
-                  color: isActive ? 'var(--text-main)' : 'var(--text-muted)'
-                }}>
-                  {profile.name || `요금제 ${idx + 1}`}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: '0.82rem',
+                    fontWeight: isActive ? '700' : '500',
+                    color: isActive ? 'var(--text-main)' : 'var(--text-muted)'
+                  }}>
+                    {profile.name || `요금제 ${idx + 1}`}
+                  </span>
+                  {profile.needsRegistration && (
+                    <span
+                      title="월간 한도와 현재 사용량을 등록해 주세요"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '1px 5px',
+                        borderRadius: '999px',
+                        background: 'rgba(245, 158, 11, 0.14)',
+                        border: '1px solid rgba(245, 158, 11, 0.38)',
+                        color: '#f59e0b',
+                        fontSize: '0.61rem',
+                        fontWeight: '700',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <AlertCircle size={9} />
+                      정보 등록 필요
+                    </span>
+                  )}
+                </div>
                 <span style={{ fontSize: '0.68rem', color: isActive ? 'var(--accent-blue)' : 'var(--text-dim)' }}>
                   {usedGB.toFixed(1)} / {limitGB} GB ({pct.toFixed(0)}%)
                 </span>
@@ -117,8 +142,8 @@ export default function ProfileTabBar({
           );
         })}
 
-        {/* Add Profile Button (Max 5) */}
-        {profiles.length < 5 && (
+        {/* Add Profile Button */}
+        {profiles.length < MAX_PROFILES && (
           <button
             onClick={handleAdd}
             className="glass-btn"
@@ -130,10 +155,10 @@ export default function ProfileTabBar({
               color: 'var(--text-muted)',
               borderColor: 'var(--glass-border)'
             }}
-            title="새 요금제/어댑터 프로필 추가 (최대 5개)"
+            title={`새 요금제/네트워크 프로필 추가 (최대 ${MAX_PROFILES}개)`}
           >
             <Plus size={14} color="var(--brand-color)" />
-            <span>요금제 추가 ({profiles.length}/5)</span>
+            <span>요금제 추가 ({profiles.length}/{MAX_PROFILES})</span>
           </button>
         )}
       </div>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { X, Check, Settings, Download, Upload, FileText, Power } from 'lucide-react';
 import { fetchNetworkInterfaces, setAutoStart, getAutoStart } from '../services/networkTelemetry';
+import { MAX_BACKUP_FILE_BYTES, parseBackupConfig } from '../services/backupService';
+import { createCsvRow } from '../utils/csvSecurity';
 
 function SettingsModal({
   config,
@@ -75,7 +77,18 @@ function SettingsModal({
     const profiles = config?.profiles || (activeProfile ? [activeProfile] : []);
     const now = new Date().toISOString();
     
-    let csvString = "측정일시,프로필명,통신사,기본보정량(GB),실시간누적(GB),총사용량(GB),월간한도(GB),소진율(%),리셋일,연결어댑터\n";
+    let csvString = `${createCsvRow([
+      '측정일시',
+      '프로필명',
+      '통신사',
+      '기본보정량(GB)',
+      '실시간누적(GB)',
+      '총사용량(GB)',
+      '월간한도(GB)',
+      '소진율(%)',
+      '리셋일',
+      '연결어댑터'
+    ])}\n`;
     
     profiles.forEach(p => {
       const baseline = parseFloat(p.initialBaselineGB) || 0;
@@ -84,7 +97,18 @@ function SettingsModal({
       const limit = p.monthlyLimitGB || 100;
       const pct = ((totalGB / limit) * 100).toFixed(1);
       
-      csvString += `"${now}","${p.name || ''}","${p.carrierName || ''}",${baseline.toFixed(2)},${sessionGB.toFixed(2)},${totalGB.toFixed(2)},${limit},${pct}%,"매월 ${p.resetDay || 1}일","${p.selectedInterface || '전체'}"\n`;
+      csvString += `${createCsvRow([
+        now,
+        p.name || '',
+        p.carrierName || '',
+        baseline.toFixed(2),
+        sessionGB.toFixed(2),
+        totalGB.toFixed(2),
+        limit,
+        `${pct}%`,
+        `매월 ${p.resetDay || 1}일`,
+        p.selectedInterface || '전체'
+      ])}\n`;
     });
 
     const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
@@ -121,17 +145,17 @@ function SettingsModal({
   const handleImportJSON = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+
+    if (file.size > MAX_BACKUP_FILE_BYTES) {
+      alert('백업 파일은 1MB 이하여야 합니다.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const parsed = JSON.parse(event.target.result);
-        const importedConfig = parsed.config || parsed;
-
-        if (!importedConfig || (!importedConfig.profiles && !importedConfig.monthlyLimitGB)) {
-          alert('올바른 돌핀 데이터 백업 파일이 아닙니다.');
-          return;
-        }
+        const importedConfig = parseBackupConfig(event.target?.result);
 
         if (onImportConfig) {
           onImportConfig(importedConfig);

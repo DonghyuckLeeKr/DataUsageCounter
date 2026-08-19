@@ -194,6 +194,22 @@ export const terminateProcess = async (pid) => {
   return false;
 };
 
+export const fetchCurrentNetworkIdentity = async () => {
+  const invoke = await getTauriInvoke();
+  if (!invoke) {
+    return {
+      connected: false,
+      fingerprint: '',
+      identityKind: '',
+      networkName: '',
+      interfaceName: '',
+      interfaceDescription: '',
+      connectionType: ''
+    };
+  }
+  return invoke('get_current_network_identity');
+};
+
 export const runPingTest = async (host = '8.8.8.8') => {
   if (isTauriAvailable()) {
     const invoke = await getTauriInvoke();

@@ -124,7 +124,7 @@ impl Default for NetworkSampler {
 }
 
 fn counter_delta(previous: u64, current: u64) -> u64 {
-    current.checked_sub(previous).unwrap_or(0)
+    current.saturating_sub(previous)
 }
 
 fn bytes_per_second(bytes: u64, elapsed: Duration) -> u64 {

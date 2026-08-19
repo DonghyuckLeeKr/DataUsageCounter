@@ -7,15 +7,18 @@ import {
   calculateTotalUsedGB,
   getTodayKey,
   addDailyUsageBytes,
+  MAX_PROFILES,
   normalizeConfig,
   rolloverBillingCycles
 } from './services/storageService';
 import {
+  fetchCurrentNetworkIdentity,
   fetchRealtimeStats,
   isTauriAvailable,
   setWindowMiniMode,
   updateTrayTooltip
 } from './services/networkTelemetry';
+import { reconcileNetworkProfile } from './services/networkProfileService';
 import { checkAndNotifyThresholds, checkAndNotifyDailySurge } from './services/notificationService';
 import { formatSpeed } from './utils/formatters';
 import Header from './components/Header';
@@ -50,6 +53,8 @@ export default function App() {
 
   // useRef to always hold the latest config without re-creating intervals
   const configRef = useRef(config);
+  const lastNetworkFingerprintRef = useRef('');
+  const networkDetectionInFlightRef = useRef(false);
   useEffect(() => {
     configRef.current = config;
   }, [config]);
@@ -92,6 +97,43 @@ export default function App() {
     setWindowMiniMode(config.miniMode);
   }, [config.miniMode]);
 
+  // Detect router/hotspot changes independently from the PC's Wi-Fi adapter.
+  // A profile is only switched when the network fingerprint actually changes,
+  // so users can still inspect another profile manually while staying connected.
+  useEffect(() => {
+    if (!isTauriAvailable()) return undefined;
+
+    const syncNetworkProfile = async () => {
+      if (networkDetectionInFlightRef.current) return;
+      networkDetectionInFlightRef.current = true;
+      try {
+        const identity = await fetchCurrentNetworkIdentity();
+        const fingerprint = identity?.connected ? (identity.fingerprint || '') : '';
+        if (!fingerprint) {
+          lastNetworkFingerprintRef.current = '';
+          return;
+        }
+        if (fingerprint === lastNetworkFingerprintRef.current) return;
+
+        lastNetworkFingerprintRef.current = fingerprint;
+        setConfig(prev => {
+          const result = reconcileNetworkProfile(prev, identity);
+          if (result.config === prev) return prev;
+          saveConfig(result.config);
+          return result.config;
+        });
+      } catch (error) {
+        console.warn('Network profile detection failed', error);
+      } finally {
+        networkDetectionInFlightRef.current = false;
+      }
+    };
+
+    syncNetworkProfile();
+    const interval = setInterval(syncNetworkProfile, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Listen for Tauri IPC System Tray events ("toggle-mini")
   useEffect(() => {
     let unlisten = null;
@@ -124,6 +166,7 @@ export default function App() {
       try {
         const latestConfig = configRef.current;
         const currentProfile = getActiveProfile(latestConfig);
+        const meteredProfileId = currentProfile.id;
         const stats = await fetchRealtimeStats(currentProfile.selectedInterface || 'ALL (전체 인터페이스)');
         if (stats) {
           setTelemetry({ ...stats, error: '' });
@@ -152,11 +195,13 @@ export default function App() {
           if (addedBytes > 0) {
             setConfig(prev => {
               const rolledConfig = rolloverBillingCycles(prev);
-              const activeId = rolledConfig.activeProfileId;
+              const targetProfileId = (rolledConfig.profiles || []).some(profile => profile.id === meteredProfileId)
+                ? meteredProfileId
+                : rolledConfig.activeProfileId;
               let targetProfileName = '요금제';
 
               const updatedProfiles = (rolledConfig.profiles || []).map(p => {
-                if (p.id === activeId) {
+                if (p.id === targetProfileId) {
                   targetProfileName = p.name;
                   const updatedP = {
                     ...p,
@@ -172,13 +217,13 @@ export default function App() {
 
               // Accumulate into dailyHistory
               const todayKey = getTodayKey();
-              const configWithDailyUsage = addDailyUsageBytes(rolledConfig, activeId, todayKey, addedBytes);
-              const newTodayBytes = configWithDailyUsage.dailyHistoryByProfile[activeId][todayKey];
+              const configWithDailyUsage = addDailyUsageBytes(rolledConfig, targetProfileId, todayKey, addedBytes);
+              const newTodayBytes = configWithDailyUsage.dailyHistoryByProfile[targetProfileId][todayKey];
               const newTodayGB = newTodayBytes / (1024 * 1024 * 1024);
 
               // Check daily surge limit notification
               if (rolledConfig.alerts?.dailySurge !== false) {
-                checkAndNotifyDailySurge(newTodayGB, rolledConfig.dailySurgeLimitGB || 5, targetProfileName, activeId);
+                checkAndNotifyDailySurge(newTodayGB, rolledConfig.dailySurgeLimitGB || 5, targetProfileName, targetProfileId);
               }
 
               const updatedConfig = {
@@ -248,7 +293,7 @@ export default function App() {
 
   const handleAddProfile = useCallback((newProfile) => {
     setConfig(prev => {
-      if ((prev.profiles || []).length >= 5) return prev;
+      if ((prev.profiles || []).length >= MAX_PROFILES) return prev;
       const updatedProfiles = [...(prev.profiles || []), newProfile];
       const updated = { ...prev, profiles: updatedProfiles, activeProfileId: newProfile.id };
       saveConfig(updated);
@@ -258,6 +303,10 @@ export default function App() {
 
   const handleDeleteProfile = useCallback((profileId) => {
     setConfig(prev => {
+      const deletingProfile = (prev.profiles || []).find(profile => profile.id === profileId);
+      if (deletingProfile?.networkFingerprint === lastNetworkFingerprintRef.current) {
+        lastNetworkFingerprintRef.current = '';
+      }
       const remaining = (prev.profiles || []).filter(p => p.id !== profileId);
       if (remaining.length === 0) return prev;
       const nextActiveId = prev.activeProfileId === profileId ? remaining[0].id : prev.activeProfileId;
@@ -327,7 +376,7 @@ export default function App() {
           telemetry={telemetry}
         />
 
-        {/* Multi-Profile Tab Switcher Bar (Up to 5 profiles) */}
+        {/* Network-aware multi-profile tab switcher */}
         <ProfileTabBar
           config={config}
           onSwitchProfile={handleSwitchProfile}

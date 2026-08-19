@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   addDailyUsageBytes,
   getBillingPeriod,
+  MAX_DAILY_HISTORY_ENTRIES,
   normalizeConfig,
   rolloverBillingCycles
 } from '../src/services/storageService.js';
@@ -59,4 +60,61 @@ test('legacy global GB history migrates to active-profile byte history', () => {
 
 test('malformed backup without a profile is rejected', () => {
   assert.throws(() => normalizeConfig({ profiles: 'not-an-array' }), /유효한 요금제 프로필/);
+});
+
+test('network identity metadata survives config normalization', () => {
+  const config = normalizeConfig({
+    activeProfileId: 'auto-b',
+    profiles: [{
+      id: 'auto-b',
+      name: 'Hotspot B',
+      networkFingerprint: 'network-v1-b',
+      networkName: 'Hotspot B',
+      networkIdentityKind: 'gateway-mac',
+      profileOrigin: 'auto-network',
+      needsRegistration: true
+    }]
+  });
+
+  assert.equal(config.profiles[0].networkFingerprint, 'network-v1-b');
+  assert.equal(config.profiles[0].profileOrigin, 'auto-network');
+  assert.equal(config.profiles[0].needsRegistration, true);
+});
+
+test('backup normalization keeps only the supported config and profile schema', () => {
+  const config = normalizeConfig({
+    activeProfileId: 'profile-1',
+    profiles: [{
+      id: 'profile-1',
+      name: '안전한 프로필',
+      affiliateUrl: 'javascript:alert(1)',
+      injectedProfileField: { unexpected: true }
+    }],
+    alerts: { t80: false, injectedAlert: true },
+    injectedTopLevelField: 'drop-me'
+  });
+
+  assert.equal(config.profiles[0].name, '안전한 프로필');
+  assert.equal(config.profiles[0].affiliateUrl, undefined);
+  assert.equal(config.profiles[0].injectedProfileField, undefined);
+  assert.equal(config.injectedTopLevelField, undefined);
+  assert.deepEqual(config.alerts, { t80: false, t90: true, t95: true, dailySurge: true });
+});
+
+test('daily history is limited to known profiles and the newest bounded entries', () => {
+  const history = {};
+  for (let index = 0; index < MAX_DAILY_HISTORY_ENTRIES + 5; index += 1) {
+    const date = new Date(Date.UTC(2026, 0, 1 + index));
+    history[date.toISOString().slice(0, 10)] = index;
+  }
+
+  const config = makeConfig({
+    dailyHistoryByProfile: {
+      'profile-1': history,
+      unknown: { '2026-08-19': 999 }
+    }
+  });
+
+  assert.equal(Object.keys(config.dailyHistoryByProfile['profile-1']).length, MAX_DAILY_HISTORY_ENTRIES);
+  assert.equal(config.dailyHistoryByProfile.unknown, undefined);
 });
