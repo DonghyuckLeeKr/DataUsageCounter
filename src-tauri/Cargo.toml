@@ -1,6 +1,6 @@
 [package]
 name = "data-usage-counter"
-version = "1.2.1"
+version = "1.2.4"
 description = "Dolphin Data - Real-time Network & LTE Data Monitor"
 authors = ["DolphinData contributors"]
 edition = "2021"
@@ -23,6 +23,9 @@ tauri = { version = "1.5", features = [ "window-close", "window-show", "window-s
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sysinfo = "0.30"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.48", features = ["Win32_Foundation", "Win32_System_Threading"] }
 
 [features]
 default = ["custom-protocol"]

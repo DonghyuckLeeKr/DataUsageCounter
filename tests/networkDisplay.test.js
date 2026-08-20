@@ -20,3 +20,9 @@ test('USB mobile adapters and Ethernet receive distinct copy', () => {
   assert.equal(getNetworkConnectionKind({ interfaceDescription: 'Remote NDIS Compatible Device' }), 'mobile-router');
   assert.equal(getNetworkConnectionKind({ interfaceName: 'Ethernet 2', networkConnectionType: '802.3' }), 'ethernet');
 });
+
+test('missing network metadata renders the neutral disconnected state', () => {
+  assert.equal(getNetworkConnectionKind(null), 'network');
+  assert.equal(getNetworkConnectionKind(undefined), 'network');
+  assert.equal(getNetworkDisplayInfo(null).label, '네트워크');
+});

@@ -15,7 +15,80 @@ use tauri::{
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::{
+    Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, WAIT_OBJECT_0},
+    System::Threading::{CreateEventW, CreateMutexW, SetEvent, WaitForSingleObject, INFINITE},
+};
+
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+const INSTANCE_MUTEX_NAME: &str = "Local\\DolphinData.com.datausage.counter.instance";
+
+#[cfg(target_os = "windows")]
+const INSTANCE_EVENT_NAME: &str = "Local\\DolphinData.com.datausage.counter.show";
+
+#[cfg(target_os = "windows")]
+struct SingleInstanceGuard {
+    mutex: isize,
+    event: isize,
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for SingleInstanceGuard {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.event);
+            CloseHandle(self.mutex);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(target_os = "windows")]
+fn acquire_single_instance() -> Result<Option<SingleInstanceGuard>, String> {
+    let mutex_name = wide_null(INSTANCE_MUTEX_NAME);
+    let event_name = wide_null(INSTANCE_EVENT_NAME);
+    unsafe {
+        let mutex = CreateMutexW(std::ptr::null(), 0, mutex_name.as_ptr());
+        if mutex == 0 {
+            return Err("앱 단일 실행 잠금을 만들지 못했습니다.".to_string());
+        }
+        let already_running = GetLastError() == ERROR_ALREADY_EXISTS;
+        let event = CreateEventW(std::ptr::null(), 0, 0, event_name.as_ptr());
+        if event == 0 {
+            CloseHandle(mutex);
+            return Err("기존 앱 창 복원 신호를 만들지 못했습니다.".to_string());
+        }
+        if already_running {
+            let _ = SetEvent(event);
+            CloseHandle(event);
+            CloseHandle(mutex);
+            return Ok(None);
+        }
+        Ok(Some(SingleInstanceGuard { mutex, event }))
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn listen_for_relaunch(app: tauri::AppHandle, event: isize) {
+    std::thread::spawn(move || loop {
+        let wait_result = unsafe { WaitForSingleObject(event, INFINITE) };
+        if wait_result != WAIT_OBJECT_0 {
+            break;
+        }
+        if let Some(window) = app.get_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    });
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProcessActivityInfo {
@@ -220,6 +293,16 @@ fn get_realtime_stats(target_interface: String, state: State<AppState>) -> Telem
 }
 
 fn main() {
+    #[cfg(target_os = "windows")]
+    let single_instance_guard = match acquire_single_instance() {
+        Ok(Some(guard)) => guard,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("{error}");
+            return;
+        }
+    };
+
     let mut sys = System::new_all();
     sys.refresh_processes();
 
@@ -243,6 +326,14 @@ fn main() {
         .with_tooltip("돌핀 데이터 (Dolphin Data) - 실시간 데이터 모니터");
 
     tauri::Builder::default()
+        .setup(move |app| {
+            #[cfg(target_os = "windows")]
+            {
+                listen_for_relaunch(app.handle(), single_instance_guard.event);
+                app.manage(single_instance_guard);
+            }
+            Ok(())
+        })
         .manage(state)
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {

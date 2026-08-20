@@ -1,10 +1,13 @@
 const includesAny = (value, terms) => terms.some(term => value.includes(term));
 
 export const getNetworkConnectionKind = (networkMetadata = {}) => {
+  const metadata = networkMetadata && typeof networkMetadata === 'object'
+    ? networkMetadata
+    : {};
   const adapterText = [
-    networkMetadata.interfaceName,
-    networkMetadata.interfaceDescription,
-    networkMetadata.networkConnectionType
+    metadata.interfaceName,
+    metadata.interfaceDescription,
+    metadata.networkConnectionType
   ]
     .filter(value => typeof value === 'string')
     .join(' ')

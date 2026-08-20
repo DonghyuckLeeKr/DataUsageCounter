@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "DolphinData",
-    "version": "1.2.1"
+    "version": "1.2.4"
   },
   "tauri": {
     "allowlist": {
@@ -47,7 +47,12 @@
       "identifier": "com.datausage.counter",
       "longDescription": "돌핀 데이터 (Dolphin Data) - 실시간 네트워크 트래픽 & 데이터 사용량 모니터링 프로그램",
       "shortDescription": "돌핀 데이터 (Dolphin Data)",
-      "targets": "all"
+      "targets": "all",
+      "windows": {
+        "nsis": {
+          "installMode": "perMachine"
+        }
+      }
     },
     "security": {
       "csp": "default-src 'self' tauri:; img-src 'self' asset: data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost http://192.168.0.1 http://192.168.1.1 http://192.168.8.1 http://192.168.100.1"
