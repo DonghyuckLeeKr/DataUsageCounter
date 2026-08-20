@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Wifi, Play, RefreshCw } from 'lucide-react';
 import { runPingTest } from '../services/networkTelemetry';
+import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 
-export default function PingTestCard() {
+export default function PingTestCard({ profile }) {
   const [testing, setTesting] = useState(false);
   const [pingResult, setPingResult] = useState(null);
   const [error, setError] = useState('');
+  const networkDisplay = getNetworkDisplayInfo(profile);
 
   const handleRunPing = async () => {
     setTesting(true);
@@ -45,7 +47,7 @@ export default function PingTestCard() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <h3 style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Wifi size={16} color="var(--accent-emerald)" />
-          LTE 라우터 지연시간 (Ping) 측정
+          {networkDisplay.pingTitle}
         </h3>
         <button
           onClick={handleRunPing}

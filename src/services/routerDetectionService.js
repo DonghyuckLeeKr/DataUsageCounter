@@ -35,7 +35,7 @@ export const detectLteRouterCarrier = async () => {
   if (!detectedRouter) {
     return {
       detected: false,
-      message: '응답하는 LTE 라우터 게이트웨이를 찾지 못했습니다.'
+      message: '응답하는 네트워크 게이트웨이를 찾지 못했습니다.'
     };
   }
 

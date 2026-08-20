@@ -2,10 +2,13 @@ import React from 'react';
 import { ArrowDown, ArrowUp, Maximize2, Edit3, X, Minus } from 'lucide-react';
 import { appWindow } from '@tauri-apps/api/window';
 import { calculateTotalUsedGB, getActiveProfile } from '../services/storageService';
+import { getActiveNetworkBinding } from '../services/networkProfileService';
 import { formatSpeed } from '../utils/formatters';
 
 export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibration }) {
   const activeProfile = getActiveProfile(config);
+  const networkBinding = getActiveNetworkBinding(config);
+  const isMetered = networkBinding?.meteringMode === 'metered';
   const totalUsedGB = calculateTotalUsedGB(activeProfile);
   const limitGB = activeProfile.monthlyLimitGB || 100;
   const percentage = Math.min(100, Math.max(0, (totalUsedGB / limitGB) * 100));
@@ -47,13 +50,21 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
   let statusColor = 'var(--accent-emerald)';
   let levelText = '사용량 여유';
 
-  if (percentage >= 90) {
+  if (!isMetered) {
+    levelText = networkBinding?.meteringMode === 'unmetered'
+      ? '무제한'
+      : networkBinding?.meteringMode === 'ignored'
+        ? '측정 제외'
+        : '분류 필요';
+  }
+
+  if (isMetered && percentage >= 90) {
     statusColor = 'var(--accent-rose)';
     levelText = '소진 임박';
-  } else if (percentage >= 80) {
+  } else if (isMetered && percentage >= 80) {
     statusColor = 'var(--accent-amber)';
     levelText = '절약 모드';
-  } else if (percentage >= 40) {
+  } else if (isMetered && percentage >= 40) {
     statusColor = 'var(--accent-blue)';
     levelText = '순항 중';
   }
@@ -195,14 +206,18 @@ export default function MiniGadget({ config, telemetry, onExpand, onOpenCalibrat
       {/* Quota Bar */}
       <div data-tauri-drag-region>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '3px' }}>
-          <span style={{ color: 'var(--text-muted)' }}>{activeProfile.name || '월간 한도'}</span>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {isMetered ? (activeProfile.name || '월간 한도') : (networkBinding?.networkName || '현재 네트워크')}
+          </span>
           <span style={{ fontWeight: '700', color: statusColor }}>
-            {totalUsedGB.toFixed(1)} / {limitGB} GB ({percentage.toFixed(0)}%)
+            {isMetered
+              ? `${totalUsedGB.toFixed(1)} / ${limitGB} GB (${percentage.toFixed(0)}%)`
+              : levelText}
           </span>
         </div>
         <div style={{ height: '5px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '10px', overflow: 'hidden' }}>
           <div style={{
-            width: `${percentage}%`,
+            width: `${isMetered ? percentage : 0}%`,
             height: '100%',
             background: statusColor,
             borderRadius: '10px',

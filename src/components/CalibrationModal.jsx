@@ -3,7 +3,7 @@ import { X, Check, Edit3, RefreshCw, Radio, Sparkles } from 'lucide-react';
 import { detectLteRouterCarrier } from '../services/routerDetectionService';
 import { getBillingPeriod } from '../services/storageService';
 
-function CalibrationModal({ profile, onSave, onClose }) {
+function CalibrationModal({ profile, networkBindings = [], onSave, onClose }) {
   const [carrierInput, setCarrierInput] = useState(profile.carrierName || profile.name || '모바일 데이터 요금제');
   const [baselineInput, setBaselineInput] = useState(
     profile.initialBaselineGB !== undefined ? String(profile.initialBaselineGB) : '0'
@@ -170,7 +170,7 @@ function CalibrationModal({ profile, onSave, onClose }) {
           }}>
             <Radio size={16} color={scanResult.detected ? 'var(--accent-emerald)' : 'var(--accent-rose)'} />
             <div>
-              <b>{scanResult.detected ? 'LTE 라우터 게이트웨이 응답 확인' : '라우터를 찾지 못했습니다'}</b><br />
+              <b>{scanResult.detected ? '네트워크 게이트웨이 응답 확인' : '게이트웨이를 찾지 못했습니다'}</b><br />
               {scanResult.detected && <>게이트웨이: <code>{scanResult.gatewayIp}</code><br /></>}
               {scanResult.message}
             </div>
@@ -179,7 +179,7 @@ function CalibrationModal({ profile, onSave, onClose }) {
 
         <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-          {profile.networkFingerprint && (
+          {networkBindings.length > 0 && (
             <div style={{
               padding: '10px 12px',
               borderRadius: '10px',
@@ -189,8 +189,10 @@ function CalibrationModal({ profile, onSave, onClose }) {
               fontSize: '0.75rem',
               lineHeight: 1.55
             }}>
-              자동 인식 네트워크: <b style={{ color: 'var(--text-main)' }}>{profile.networkName || profile.name}</b><br />
-              이 네트워크에 다시 연결하면 해당 프로필로 자동 전환됩니다.
+              연결된 네트워크: <b style={{ color: 'var(--text-main)' }}>
+                {networkBindings.map(binding => binding.networkName || binding.interfaceName).filter(Boolean).join(', ')}
+              </b><br />
+              네트워크 연결 변경은 환경 설정에서 관리합니다.
             </div>
           )}
           
@@ -224,7 +226,7 @@ function CalibrationModal({ profile, onSave, onClose }) {
               value={carrierInput}
               onChange={(e) => setCarrierInput(e.target.value)}
               className="glass-input"
-              placeholder="예: 스마트폰 테더링 20GB, LTE 라우터 80GB 등"
+              placeholder="예: 스마트폰 테더링 20GB, 모바일 라우터 80GB 등"
               required
             />
           </div>

@@ -1,7 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { formatSpeed } from '../utils/formatters';
+import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 
-export default function TrafficTimeSeriesChart({ historyData, unitMode }) {
+export default function TrafficTimeSeriesChart({ historyData, unitMode, profile }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export default function TrafficTimeSeriesChart({ historyData, unitMode }) {
 
   const currentDown = historyData.length > 0 ? historyData[historyData.length - 1].downloadSpeed : 0;
   const currentUp = historyData.length > 0 ? historyData[historyData.length - 1].uploadSpeed : 0;
+  const networkDisplay = getNetworkDisplayInfo(profile);
 
   return (
     <div className="glass-card" style={{ padding: '24px' }}>
@@ -89,7 +91,7 @@ export default function TrafficTimeSeriesChart({ historyData, unitMode }) {
             실시간 트래픽 추이 (최근 60초)
           </h3>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            USB LTE 라우터 실시간 바이트 스트림
+            {networkDisplay.trafficDescription}
           </span>
         </div>
 

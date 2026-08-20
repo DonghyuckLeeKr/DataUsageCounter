@@ -1,25 +1,21 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { X, Check, Settings, Download, Upload, FileText, Power } from 'lucide-react';
-import { fetchNetworkInterfaces, setAutoStart, getAutoStart } from '../services/networkTelemetry';
+import { X, Check, Settings, Download, Upload, FileText, Power, Wifi } from 'lucide-react';
+import { setAutoStart, getAutoStart } from '../services/networkTelemetry';
+import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 import { MAX_BACKUP_FILE_BYTES, parseBackupConfig } from '../services/backupService';
 import { createCsvRow } from '../utils/csvSecurity';
 
 function SettingsModal({
   config,
   activeProfile,
+  networkBinding,
   onSave,
-  onSaveProfile,
+  onSaveNetworkBinding,
   onImportConfig,
   onClose
 }) {
-  const [interfaces, setInterfaces] = useState([
-    'ALL (전체 인터페이스)',
-    'Ethernet 2 (LG U+ LTE 라우터 USB)',
-    'Wi-Fi (무선 랜 / 핫스팟)'
-  ]);
-  const [selectedIf, setSelectedIf] = useState(
-    activeProfile?.selectedInterface || config?.selectedInterface || 'ALL (전체 인터페이스)'
-  );
+  const [meteringMode, setMeteringMode] = useState(networkBinding?.meteringMode || 'unclassified');
+  const [boundProfileId, setBoundProfileId] = useState(networkBinding?.profileId || activeProfile?.id || '');
   const [unitMode, setUnitMode] = useState(config?.unitMode || 'MBs');
   const [autoStartEnabled, setAutoStartEnabled] = useState(Boolean(config?.autoStart));
   const [dailySurgeLimit, setDailySurgeLimit] = useState(
@@ -29,11 +25,6 @@ function SettingsModal({
 
   useEffect(() => {
     let isMounted = true;
-    fetchNetworkInterfaces().then(list => {
-      if (isMounted && Array.isArray(list) && list.length > 0) {
-        setInterfaces(list);
-      }
-    });
     getAutoStart().then(enabled => {
       if (isMounted) {
         setAutoStartEnabled(Boolean(enabled));
@@ -57,8 +48,11 @@ function SettingsModal({
       return;
     }
 
-    if (onSaveProfile) {
-      onSaveProfile({ selectedInterface: selectedIf });
+    if (onSaveNetworkBinding && networkBinding) {
+      onSaveNetworkBinding({
+        meteringMode,
+        profileId: meteringMode === 'metered' ? boundProfileId : (networkBinding.profileId || boundProfileId)
+      });
     }
 
     if (onSave) {
@@ -87,7 +81,8 @@ function SettingsModal({
       '월간한도(GB)',
       '소진율(%)',
       '리셋일',
-      '연결어댑터'
+      '연결네트워크',
+      '과금분류'
     ])}\n`;
     
     profiles.forEach(p => {
@@ -97,6 +92,10 @@ function SettingsModal({
       const limit = p.monthlyLimitGB || 100;
       const pct = ((totalGB / limit) * 100).toFixed(1);
       
+      const profileBindings = (config?.networkBindings || []).filter(binding => binding.profileId === p.id);
+      const networkNames = profileBindings.map(binding => binding.networkName).filter(Boolean).join(' | ') || '없음';
+      const meteringModes = [...new Set(profileBindings.map(binding => binding.meteringMode))].join(' | ') || '없음';
+
       csvString += `${createCsvRow([
         now,
         p.name || '',
@@ -107,7 +106,8 @@ function SettingsModal({
         limit,
         `${pct}%`,
         `매월 ${p.resetDay || 1}일`,
-        p.selectedInterface || '전체'
+        networkNames,
+        meteringModes
       ])}\n`;
     });
 
@@ -120,6 +120,14 @@ function SettingsModal({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
+  const modeDescriptions = {
+    metered: '이 네트워크의 송수신량을 선택한 요금제에 누적합니다.',
+    unmetered: '집·회사 Wi-Fi처럼 한도 차감 없이 실시간 속도만 표시합니다.',
+    ignored: '이 네트워크는 사용량 누적에서 제외합니다.',
+    unclassified: '아직 분류하지 않았습니다. 분류 전에는 사용량을 누적하지 않습니다.'
   };
 
   // Export Full JSON Configuration Backup
@@ -239,7 +247,7 @@ function SettingsModal({
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-main)' }}>환경 설정 & 데이터 백업</h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              자동 실행, 일일 한도 경고, 어댑터 및 백업/복원을 관리합니다.
+              자동 실행, 네트워크별 과금 방식, 일일 경고 및 백업/복원을 관리합니다.
             </p>
           </div>
         </div>
@@ -306,24 +314,61 @@ function SettingsModal({
             </span>
           </div>
 
-          {/* Network Interface Selection */}
+          {/* Current network identity and quota mapping */}
           <div>
             <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              '{activeProfile?.name || '현재 요금제'}'에 지정할 네트워크 어댑터
+              현재 네트워크의 사용량 처리
             </label>
-            <select
-              value={selectedIf}
-              onChange={(e) => setSelectedIf(e.target.value)}
-              className="glass-input"
-              style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
-            >
-              {interfaces.map((name, idx) => (
-                <option key={idx} value={name} style={{ background: 'var(--bg-primary)', color: 'var(--text-main)' }}>{name}</option>
-              ))}
-            </select>
-            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              스마트폰 핫스팟은 Wi-Fi, 휴대용 라우터는 RNDIS/NDIS/이더넷을 선택하세요.
-            </span>
+            {networkBinding ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Wifi size={16} color="var(--brand-color)" />
+                    <b style={{ color: 'var(--text-main)', fontSize: '0.84rem' }}>{networkBinding.networkName || '알 수 없는 네트워크'}</b>
+                    <span style={{ color: 'var(--accent-blue)', fontSize: '0.72rem' }}>{networkDisplay.label}</span>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.71rem', display: 'block', marginTop: '4px' }}>
+                    자동 선택된 물리 어댑터: {networkBinding.interfaceName || '확인 중'}
+                  </span>
+                </div>
+
+                <select
+                  value={meteringMode}
+                  onChange={(e) => setMeteringMode(e.target.value)}
+                  className="glass-input"
+                  style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
+                >
+                  <option value="unclassified" style={{ background: 'var(--bg-primary)' }}>정보 등록 필요 (누적 보류)</option>
+                  <option value="metered" style={{ background: 'var(--bg-primary)' }}>데이터 한도 차감 네트워크</option>
+                  <option value="unmetered" style={{ background: 'var(--bg-primary)' }}>무제한 네트워크 (집·회사 Wi-Fi)</option>
+                  <option value="ignored" style={{ background: 'var(--bg-primary)' }}>측정 제외</option>
+                </select>
+
+                {meteringMode === 'metered' && (
+                  <select
+                    value={boundProfileId}
+                    onChange={(e) => setBoundProfileId(e.target.value)}
+                    className="glass-input"
+                    style={{ color: 'var(--text-main)', width: '100%', cursor: 'pointer' }}
+                    required
+                  >
+                    {(config?.profiles || []).map(profile => (
+                      <option key={profile.id} value={profile.id} style={{ background: 'var(--bg-primary)' }}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)', display: 'block' }}>
+                  {modeDescriptions[meteringMode]}
+                </span>
+              </div>
+            ) : (
+              <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.28)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                연결된 네트워크를 확인 중입니다. 네트워크가 인식되면 여기서 요금제 연결 여부를 지정할 수 있습니다.
+              </div>
+            )}
           </div>
 
           {/* Unit Toggle */}

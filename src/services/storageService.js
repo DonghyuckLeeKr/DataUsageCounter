@@ -5,21 +5,26 @@ const BACKUP_KEY = 'data_usage_counter_v1_backup';
 const BYTES_PER_GB = 1024 * 1024 * 1024;
 export const MAX_PROFILES = 20;
 export const MAX_DAILY_HISTORY_ENTRIES = 1000;
+export const MAX_NETWORK_BINDINGS = 100;
 
 const MAX_TEXT_LENGTHS = {
   id: 128,
   name: 100,
   carrierName: 100,
   lastResetPeriod: 32,
-  selectedInterface: 256,
   networkFingerprint: 128,
   networkName: 128,
   networkIdentityKind: 32,
+  interfaceName: 256,
   interfaceDescription: 256,
+  networkConnectionType: 64,
+  profileId: 128,
+  lastSeenAt: 64,
   icon: 16
 };
 
 const ALLOWED_THEMES = new Set(['soft-dark', 'midnight-black', 'nordic-light', 'neon-cyber']);
+const ALLOWED_METERING_MODES = new Set(['metered', 'unmetered', 'ignored', 'unclassified']);
 
 export const DEFAULT_PROFILE = {
   id: 'profile-1',
@@ -30,11 +35,6 @@ export const DEFAULT_PROFILE = {
   sessionBytes: 0,
   resetDay: 1,
   lastResetPeriod: '',
-  selectedInterface: 'ALL (전체 인터페이스)',
-  networkFingerprint: '',
-  networkName: '',
-  networkIdentityKind: '',
-  interfaceDescription: '',
   profileOrigin: 'manual',
   needsRegistration: false,
   icon: '📱'
@@ -76,6 +76,8 @@ const createDefaultConfig = () => ({
   autoStart: false,
   dailySurgeLimitGB: 5,
   dailyHistoryByProfile: {},
+  activeNetworkFingerprint: '',
+  networkBindings: [],
   alerts: {
     t80: true,
     t90: true,
@@ -115,6 +117,33 @@ const isValidDateKey = (dateKey) => {
     && date.getUTCDate() === day;
 };
 
+const normalizeNetworkBinding = (binding, profileIds) => {
+  const fingerprint = normalizeText(binding?.fingerprint, '', MAX_TEXT_LENGTHS.networkFingerprint);
+  if (!fingerprint) return null;
+  const profileId = profileIds.has(binding?.profileId)
+    ? normalizeText(binding.profileId, '', MAX_TEXT_LENGTHS.profileId)
+    : '';
+  const fallbackMode = profileId ? 'metered' : 'unclassified';
+  const requestedMode = ALLOWED_METERING_MODES.has(binding?.meteringMode)
+    ? binding.meteringMode
+    : fallbackMode;
+  return {
+    fingerprint,
+    networkName: normalizeText(binding?.networkName, '알 수 없는 네트워크', MAX_TEXT_LENGTHS.networkName),
+    identityKind: normalizeText(binding?.identityKind, '', MAX_TEXT_LENGTHS.networkIdentityKind),
+    interfaceName: normalizeText(binding?.interfaceName, '', MAX_TEXT_LENGTHS.interfaceName),
+    interfaceDescription: normalizeText(binding?.interfaceDescription, '', MAX_TEXT_LENGTHS.interfaceDescription),
+    networkConnectionType: normalizeText(
+      binding?.networkConnectionType,
+      '',
+      MAX_TEXT_LENGTHS.networkConnectionType
+    ),
+    profileId,
+    meteringMode: requestedMode === 'metered' && !profileId ? 'unclassified' : requestedMode,
+    lastSeenAt: normalizeText(binding?.lastSeenAt, '', MAX_TEXT_LENGTHS.lastSeenAt)
+  };
+};
+
 const normalizeProfile = (profile, index) => {
   const fallbackId = `profile-${index + 1}`;
   const resetDay = Math.min(31, Math.max(1, parseInt(profile?.resetDay, 10) || 1));
@@ -127,15 +156,6 @@ const normalizeProfile = (profile, index) => {
     sessionBytes: Math.round(normalizeNumber(profile?.sessionBytes, 0, 0, Number.MAX_SAFE_INTEGER)),
     resetDay,
     lastResetPeriod: normalizeText(profile?.lastResetPeriod, '', MAX_TEXT_LENGTHS.lastResetPeriod),
-    selectedInterface: normalizeText(
-      profile?.selectedInterface,
-      DEFAULT_PROFILE.selectedInterface,
-      MAX_TEXT_LENGTHS.selectedInterface
-    ),
-    networkFingerprint: normalizeText(profile?.networkFingerprint, '', MAX_TEXT_LENGTHS.networkFingerprint),
-    networkName: normalizeText(profile?.networkName, '', MAX_TEXT_LENGTHS.networkName),
-    networkIdentityKind: normalizeText(profile?.networkIdentityKind, '', MAX_TEXT_LENGTHS.networkIdentityKind),
-    interfaceDescription: normalizeText(profile?.interfaceDescription, '', MAX_TEXT_LENGTHS.interfaceDescription),
     profileOrigin: profile?.profileOrigin === 'auto-network' ? 'auto-network' : 'manual',
     needsRegistration: Boolean(profile?.needsRegistration),
     icon: normalizeText(profile?.icon, DEFAULT_PROFILE.icon, MAX_TEXT_LENGTHS.icon)
@@ -190,8 +210,7 @@ export const normalizeConfig = (input) => {
       monthlyLimitGB: input.monthlyLimitGB,
       initialBaselineGB: input.initialBaselineGB,
       sessionBytes: input.sessionBytes,
-      resetDay: input.resetDay,
-      selectedInterface: input.selectedInterface
+      resetDay: input.resetDay
     }, 0)];
   } else {
     throw new Error('유효한 요금제 프로필이 없습니다.');
@@ -199,6 +218,36 @@ export const normalizeConfig = (input) => {
 
   const profileIds = new Set(profiles.map(profile => profile.id));
   const activeProfileId = profileIds.has(input.activeProfileId) ? input.activeProfileId : profiles[0].id;
+  let networkBindings = [];
+  if (Array.isArray(input.networkBindings)) {
+    const seenFingerprints = new Set();
+    networkBindings = input.networkBindings
+      .slice(0, MAX_NETWORK_BINDINGS)
+      .map(binding => normalizeNetworkBinding(binding, profileIds))
+      .filter(binding => {
+        if (!binding || seenFingerprints.has(binding.fingerprint)) return false;
+        seenFingerprints.add(binding.fingerprint);
+        return true;
+      });
+  } else if (Array.isArray(input.profiles)) {
+    networkBindings = input.profiles
+      .slice(0, MAX_PROFILES)
+      .map((legacyProfile, index) => normalizeNetworkBinding({
+        fingerprint: legacyProfile?.networkFingerprint,
+        networkName: legacyProfile?.networkName || legacyProfile?.name,
+        identityKind: legacyProfile?.networkIdentityKind,
+        interfaceName: legacyProfile?.selectedInterface,
+        interfaceDescription: legacyProfile?.interfaceDescription,
+        networkConnectionType: legacyProfile?.networkConnectionType,
+        profileId: profiles[index]?.id,
+        meteringMode: 'metered'
+      }, profileIds))
+      .filter(Boolean);
+  }
+  const bindingFingerprints = new Set(networkBindings.map(binding => binding.fingerprint));
+  const activeNetworkFingerprint = bindingFingerprints.has(input.activeNetworkFingerprint)
+    ? input.activeNetworkFingerprint
+    : '';
   let dailyHistoryByProfile = normalizeDailyHistory(input.dailyHistoryByProfile, profileIds);
 
   if (Object.keys(dailyHistoryByProfile).length === 0 && input.dailyHistory && typeof input.dailyHistory === 'object') {
@@ -216,6 +265,8 @@ export const normalizeConfig = (input) => {
     autoStart: Boolean(input.autoStart),
     dailySurgeLimitGB: normalizeNumber(input.dailySurgeLimitGB, 5, 0.5, 100),
     dailyHistoryByProfile,
+    activeNetworkFingerprint,
+    networkBindings,
     alerts: {
       t80: typeof input.alerts?.t80 === 'boolean' ? input.alerts.t80 : defaults.alerts.t80,
       t90: typeof input.alerts?.t90 === 'boolean' ? input.alerts.t90 : defaults.alerts.t90,

@@ -62,7 +62,7 @@ test('malformed backup without a profile is rejected', () => {
   assert.throws(() => normalizeConfig({ profiles: 'not-an-array' }), /유효한 요금제 프로필/);
 });
 
-test('network identity metadata survives config normalization', () => {
+test('legacy profile network metadata migrates to a separate metered binding', () => {
   const config = normalizeConfig({
     activeProfileId: 'auto-b',
     profiles: [{
@@ -71,14 +71,46 @@ test('network identity metadata survives config normalization', () => {
       networkFingerprint: 'network-v1-b',
       networkName: 'Hotspot B',
       networkIdentityKind: 'gateway-mac',
+      selectedInterface: 'Wi-Fi',
+      interfaceDescription: 'Intel Wi-Fi',
+      networkConnectionType: 'Native 802.11',
       profileOrigin: 'auto-network',
       needsRegistration: true
     }]
   });
 
-  assert.equal(config.profiles[0].networkFingerprint, 'network-v1-b');
+  assert.equal(config.profiles[0].networkFingerprint, undefined);
   assert.equal(config.profiles[0].profileOrigin, 'auto-network');
   assert.equal(config.profiles[0].needsRegistration, true);
+  assert.deepEqual(config.networkBindings[0], {
+    fingerprint: 'network-v1-b',
+    networkName: 'Hotspot B',
+    identityKind: 'gateway-mac',
+    interfaceName: 'Wi-Fi',
+    interfaceDescription: 'Intel Wi-Fi',
+    networkConnectionType: 'Native 802.11',
+    profileId: 'auto-b',
+    meteringMode: 'metered',
+    lastSeenAt: ''
+  });
+});
+
+test('network binding normalization strips unknown fields and rejects an unbound metered mode', () => {
+  const config = makeConfig({
+    activeNetworkFingerprint: 'network-v1-a',
+    networkBindings: [{
+      fingerprint: 'network-v1-a',
+      networkName: 'Home Wi-Fi',
+      profileId: 'missing-profile',
+      meteringMode: 'metered',
+      injectedField: 'drop-me'
+    }]
+  });
+
+  assert.equal(config.activeNetworkFingerprint, 'network-v1-a');
+  assert.equal(config.networkBindings[0].profileId, '');
+  assert.equal(config.networkBindings[0].meteringMode, 'unclassified');
+  assert.equal(config.networkBindings[0].injectedField, undefined);
 });
 
 test('backup normalization keeps only the supported config and profile schema', () => {

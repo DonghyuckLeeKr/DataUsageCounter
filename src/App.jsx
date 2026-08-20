@@ -18,7 +18,7 @@ import {
   setWindowMiniMode,
   updateTrayTooltip
 } from './services/networkTelemetry';
-import { reconcileNetworkProfile } from './services/networkProfileService';
+import { getActiveNetworkBinding, reconcileNetworkProfile, updateNetworkBinding } from './services/networkProfileService';
 import { checkAndNotifyThresholds, checkAndNotifyDailySurge } from './services/notificationService';
 import { formatSpeed } from './utils/formatters';
 import Header from './components/Header';
@@ -34,6 +34,7 @@ import TitleBar from './components/TitleBar';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
 import DailyHistoryModal from './components/DailyHistoryModal';
+import NetworkClassificationModal from './components/NetworkClassificationModal';
 
 export default function App() {
   const [config, setConfig] = useState(loadConfig());
@@ -50,6 +51,7 @@ export default function App() {
   const [showCalibration, setShowCalibration] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDailyHistory, setShowDailyHistory] = useState(false);
+  const [pendingNetworkFingerprint, setPendingNetworkFingerprint] = useState('');
 
   // useRef to always hold the latest config without re-creating intervals
   const configRef = useRef(config);
@@ -86,6 +88,7 @@ export default function App() {
   }, []);
 
   const activeProfile = getActiveProfile(config);
+  const activeNetworkBinding = getActiveNetworkBinding(config);
 
   // Sync theme attribute to document root element
   useEffect(() => {
@@ -115,6 +118,8 @@ export default function App() {
         }
         if (fingerprint === lastNetworkFingerprintRef.current) return;
 
+        const isNewNetwork = !(configRef.current.networkBindings || [])
+          .some(binding => binding.fingerprint === fingerprint);
         lastNetworkFingerprintRef.current = fingerprint;
         setConfig(prev => {
           const result = reconcileNetworkProfile(prev, identity);
@@ -122,6 +127,9 @@ export default function App() {
           saveConfig(result.config);
           return result.config;
         });
+        if (isNewNetwork) {
+          setPendingNetworkFingerprint(fingerprint);
+        }
       } catch (error) {
         console.warn('Network profile detection failed', error);
       } finally {
@@ -165,9 +173,14 @@ export default function App() {
     const interval = setInterval(async () => {
       try {
         const latestConfig = configRef.current;
-        const currentProfile = getActiveProfile(latestConfig);
-        const meteredProfileId = currentProfile.id;
-        const stats = await fetchRealtimeStats(currentProfile.selectedInterface || 'ALL (전체 인터페이스)');
+        const currentBinding = getActiveNetworkBinding(latestConfig);
+        const meteredProfileId = currentBinding?.meteringMode === 'metered'
+          ? currentBinding.profileId
+          : '';
+        const currentProfile = (latestConfig.profiles || []).find(profile => profile.id === meteredProfileId)
+          || getActiveProfile(latestConfig);
+        const targetInterface = currentBinding?.interfaceName || 'ALL (전체 인터페이스)';
+        const stats = await fetchRealtimeStats(targetInterface);
         if (stats) {
           setTelemetry({ ...stats, error: '' });
 
@@ -177,7 +190,14 @@ export default function App() {
           const pct = ((totalGB / limitGB) * 100).toFixed(1);
           const downStr = formatSpeed(stats.downloadSpeed || 0, latestConfig.unitMode);
           const upStr = formatSpeed(stats.uploadSpeed || 0, latestConfig.unitMode);
-          const trayTooltipText = `돌핀 데이터 [${currentProfile.name || '메인 요금제'}]\n사용량: ${totalGB.toFixed(2)} / ${limitGB} GB (${pct}%)\n실시간: ↓ ${downStr} | ↑ ${upStr}`;
+          const networkModeLabel = currentBinding?.meteringMode === 'unmetered'
+            ? '무제한 네트워크'
+            : currentBinding?.meteringMode === 'ignored'
+              ? '측정 제외'
+              : currentBinding?.meteringMode === 'unclassified'
+                ? '분류 필요'
+                : `사용량: ${totalGB.toFixed(2)} / ${limitGB} GB (${pct}%)`;
+          const trayTooltipText = `돌핀 데이터 [${currentBinding?.networkName || currentProfile.name || '현재 네트워크'}]\n${networkModeLabel}\n실시간: ↓ ${downStr} | ↑ ${upStr}`;
           updateTrayTooltip(trayTooltipText);
 
           // Accumulate bytes into the active profile's sessionBytes and dailyHistory
@@ -192,12 +212,13 @@ export default function App() {
               return rolledConfig;
             });
           }
-          if (addedBytes > 0) {
+          if (addedBytes > 0 && meteredProfileId) {
             setConfig(prev => {
               const rolledConfig = rolloverBillingCycles(prev);
               const targetProfileId = (rolledConfig.profiles || []).some(profile => profile.id === meteredProfileId)
                 ? meteredProfileId
-                : rolledConfig.activeProfileId;
+                : '';
+              if (!targetProfileId) return rolledConfig;
               let targetProfileName = '요금제';
 
               const updatedProfiles = (rolledConfig.profiles || []).map(p => {
@@ -303,14 +324,27 @@ export default function App() {
 
   const handleDeleteProfile = useCallback((profileId) => {
     setConfig(prev => {
-      const deletingProfile = (prev.profiles || []).find(profile => profile.id === profileId);
-      if (deletingProfile?.networkFingerprint === lastNetworkFingerprintRef.current) {
-        lastNetworkFingerprintRef.current = '';
-      }
       const remaining = (prev.profiles || []).filter(p => p.id !== profileId);
       if (remaining.length === 0) return prev;
       const nextActiveId = prev.activeProfileId === profileId ? remaining[0].id : prev.activeProfileId;
-      const updated = { ...prev, profiles: remaining, activeProfileId: nextActiveId };
+      const updatedBindings = (prev.networkBindings || []).map(binding => binding.profileId === profileId
+        ? { ...binding, profileId: '', meteringMode: 'unclassified' }
+        : binding);
+      const updated = {
+        ...prev,
+        profiles: remaining,
+        networkBindings: updatedBindings,
+        activeProfileId: nextActiveId
+      };
+      saveConfig(updated);
+      return updated;
+    });
+  }, []);
+
+  const handleUpdateNetworkBinding = useCallback((bindingPartial) => {
+    setConfig(prev => {
+      const updated = updateNetworkBinding(prev, bindingPartial);
+      if (updated === prev) return prev;
       saveConfig(updated);
       return updated;
     });
@@ -330,6 +364,10 @@ export default function App() {
       saveConfig(updated);
       return updated;
     });
+  }, []);
+
+  const handleCloseNetworkClassification = useCallback(() => {
+    setPendingNetworkFingerprint('');
   }, []);
 
   const handleOpenCalibrationFromMini = useCallback(() => {
@@ -369,6 +407,7 @@ export default function App() {
         <Header
           config={config}
           activeProfile={activeProfile}
+          networkBinding={activeNetworkBinding}
           onOpenDailyHistory={() => setShowDailyHistory(true)}
           onOpenSettings={() => setShowSettings(true)}
           onToggleMiniGadget={handleToggleMiniGadget}
@@ -390,6 +429,7 @@ export default function App() {
           telemetry={telemetry}
           config={config}
           activeProfile={activeProfile}
+          networkBinding={activeNetworkBinding}
         />
 
         {/* 2-Column Responsive Dashboard Layout */}
@@ -405,11 +445,14 @@ export default function App() {
             <QuotaRingCard
               profile={activeProfile}
               config={config}
+              networkBinding={activeNetworkBinding}
+              onOpenNetworkSettings={() => setShowSettings(true)}
               onOpenCalibration={() => setShowCalibration(true)}
             />
             <TrafficTimeSeriesChart
               historyData={historyData}
               unitMode={config.unitMode}
+              profile={activeNetworkBinding}
             />
           </div>
 
@@ -419,7 +462,7 @@ export default function App() {
               telemetry={telemetry}
               unitMode={config.unitMode}
             />
-            <PingTestCard />
+            <PingTestCard profile={activeNetworkBinding} />
             <AppBreakdownCard
             />
           </div>
@@ -432,6 +475,7 @@ export default function App() {
       {showCalibration && (
         <CalibrationModal
           profile={activeProfile}
+          networkBindings={(config.networkBindings || []).filter(binding => binding.profileId === activeProfile.id)}
           onSave={handleUpdateActiveProfile}
           onClose={() => setShowCalibration(false)}
         />
@@ -449,14 +493,24 @@ export default function App() {
         <SettingsModal
           config={config}
           activeProfile={activeProfile}
+          networkBinding={activeNetworkBinding}
           onSave={handleUpdateConfig}
-          onSaveProfile={handleUpdateActiveProfile}
+          onSaveNetworkBinding={handleUpdateNetworkBinding}
           onImportConfig={(newConfig) => {
             const normalized = rolloverBillingCycles(normalizeConfig(newConfig));
             setConfig(normalized);
             saveConfig(normalized);
           }}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {pendingNetworkFingerprint && (
+        <NetworkClassificationModal
+          binding={(config.networkBindings || []).find(binding => binding.fingerprint === pendingNetworkFingerprint)}
+          profiles={config.profiles || []}
+          onSave={handleUpdateNetworkBinding}
+          onClose={handleCloseNetworkClassification}
         />
       )}
 

@@ -1,9 +1,11 @@
 import React from 'react';
 import { ArrowDown, ArrowUp, Clock, Wifi } from 'lucide-react';
 import { formatBytes, getDaysRemainingInMonth } from '../utils/formatters';
+import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 
-export default function QuickStatsStrip({ telemetry, config, activeProfile }) {
+export default function QuickStatsStrip({ telemetry, config, activeProfile, networkBinding }) {
   const profile = activeProfile || config || {};
+  const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
   const daysLeft = getDaysRemainingInMonth(profile.resetDay || 1);
   const totalDownBytes = telemetry.totalRx || 0;
   const totalUpBytes = telemetry.totalTx || 0;
@@ -104,9 +106,9 @@ export default function QuickStatsStrip({ telemetry, config, activeProfile }) {
           <Wifi size={18} />
         </div>
         <div style={{ overflow: 'hidden' }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>연결된 어댑터</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>{networkDisplay.label}</span>
           <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', display: 'block' }}>
-            {profile.selectedInterface || '전체 인터페이스'}
+            {networkBinding?.networkName || networkBinding?.interfaceName || '연결 확인 중'}
           </span>
         </div>
       </div>

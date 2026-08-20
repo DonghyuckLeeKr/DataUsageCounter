@@ -73,27 +73,6 @@ export const getAutoStart = async () => {
   return false;
 };
 
-export const fetchNetworkInterfaces = async () => {
-  if (isTauriAvailable()) {
-    try {
-      const invoke = await getTauriInvoke();
-      if (invoke) {
-        return await invoke('get_network_interfaces');
-      }
-    } catch (e) {
-      console.warn('Tauri invoke error, fallback to sim', e);
-    }
-  }
-
-  // Fallback interfaces for USB LTE Router
-  return [
-    'ALL (전체 인터페이스)',
-    'Ethernet 2 (LG U+ LTE 라우터 USB)',
-    'Wi-Fi (무선 랜 / 핫스팟)',
-    'Cellular (LTE 모뎀)'
-  ];
-};
-
 export const fetchRealtimeStats = async (targetInterface = 'ALL (전체 인터페이스)') => {
   if (isTauriAvailable()) {
     try {
@@ -151,7 +130,7 @@ export const fetchRealtimeStats = async (targetInterface = 'ALL (전체 인터�
     totalTx: simState.totalTx,
     source: 'simulation',
     interfaces: [
-      { name: 'Ethernet 2 (LG U+ LTE 라우터 USB)', rxBytes: simState.totalRx, txBytes: simState.totalTx },
+      { name: 'Ethernet 2 (USB 모바일 라우터)', rxBytes: simState.totalRx, txBytes: simState.totalTx },
       { name: 'Wi-Fi', rxBytes: 1024 * 1024 * 40, txBytes: 1024 * 1024 * 10 }
     ]
   };

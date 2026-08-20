@@ -1,10 +1,12 @@
 import React from 'react';
 import { Settings, Monitor, Palette, Globe, ExternalLink, Calendar } from 'lucide-react';
 import { openRouterAdminPage } from '../services/routerDetectionService';
+import { getNetworkDisplayInfo } from '../utils/networkDisplay';
 
 export default function Header({
   config,
   activeProfile,
+  networkBinding,
   onOpenDailyHistory,
   onOpenSettings,
   onToggleMiniGadget,
@@ -12,6 +14,27 @@ export default function Header({
   telemetry
 }) {
   const currentTheme = config.theme || 'soft-dark';
+  const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
+  const currentNetworkLabel = networkBinding
+    ? `${networkDisplay.label} · ${networkBinding.networkName || networkBinding.interfaceName || '현재 네트워크'}`
+    : '네트워크 확인 중';
+  const mappedProfile = (config.profiles || []).find(profile => profile.id === networkBinding?.profileId);
+  const mappingLabel = networkBinding?.meteringMode === 'metered' && mappedProfile
+    ? `${mappedProfile.name}에 누적`
+    : networkBinding?.meteringMode === 'unmetered'
+      ? '무제한 · 누적 안 함'
+      : networkBinding?.meteringMode === 'ignored'
+        ? '측정 제외'
+        : '분류 필요 · 누적 보류';
+  const badgeLabel = networkBinding?.meteringMode === 'metered' && mappedProfile
+    ? mappedProfile.name
+    : networkBinding?.meteringMode === 'unmetered'
+      ? '무제한 네트워크'
+      : networkBinding?.meteringMode === 'ignored'
+        ? '측정 제외'
+        : networkBinding
+          ? '정보 등록 필요'
+          : activeProfile?.name || '메인 요금제';
   const telemetryLabel = telemetry?.source === 'native'
     ? '실시간 모니터링 중'
     : telemetry?.source === 'simulation'
@@ -58,11 +81,11 @@ export default function Header({
               <h1 style={{ fontSize: '1.1rem', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
                 돌핀 데이터 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500 }}>(Dolphin Data)</span>
               </h1>
-              <span className="lguplus-badge">{activeProfile?.name || '메인 요금제'}</span>
+              <span className="lguplus-badge">{badgeLabel}</span>
             </div>
             <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span className="pulse-dot"></span>
-              {activeProfile?.selectedInterface || 'ALL 인터페이스'} · {telemetryLabel}
+              {currentNetworkLabel} → {mappingLabel} · {telemetryLabel}
             </p>
           </div>
         </div>
@@ -123,7 +146,7 @@ export default function Header({
             onClick={() => openRouterAdminPage()}
             className="glass-btn"
             style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)', cursor: 'pointer' }}
-            title="LTE 라우터 웹 관리자 페이지(http://192.168.0.1) 열기"
+            title="현재 네트워크의 라우터 관리자 페이지 열기"
           >
             <Globe size={14} />
             <span>라우터</span>

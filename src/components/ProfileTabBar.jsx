@@ -27,7 +27,6 @@ export default function ProfileTabBar({
       sessionBytes: 0,
       resetDay: 1,
       lastResetPeriod: getBillingPeriod(1),
-      selectedInterface: 'ALL (전체 인터페이스)',
       profileOrigin: 'manual',
       needsRegistration: false
     };
@@ -52,6 +51,10 @@ export default function ProfileTabBar({
           const usedGB = calculateTotalUsedGB(profile);
           const limitGB = profile.monthlyLimitGB || 100;
           const pct = Math.min(100, Math.max(0, (usedGB / limitGB) * 100));
+          const mappedNetworks = (config.networkBindings || [])
+            .filter(binding => binding.profileId === profile.id)
+            .map(binding => binding.networkName || binding.interfaceName)
+            .filter(Boolean);
 
           return (
             <div
@@ -70,7 +73,7 @@ export default function ProfileTabBar({
                 transition: 'all 0.2s ease',
                 userSelect: 'none'
               }}
-              title={`${profile.name} (${profile.selectedInterface || '전체'})`}
+              title={`${profile.name} (${mappedNetworks.join(', ') || '연결된 네트워크 없음'})`}
             >
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -155,7 +158,7 @@ export default function ProfileTabBar({
               color: 'var(--text-muted)',
               borderColor: 'var(--glass-border)'
             }}
-            title={`새 요금제/네트워크 프로필 추가 (최대 ${MAX_PROFILES}개)`}
+            title={`새 요금제 프로필 추가 (최대 ${MAX_PROFILES}개)`}
           >
             <Plus size={14} color="var(--brand-color)" />
             <span>요금제 추가 ({profiles.length}/{MAX_PROFILES})</span>
