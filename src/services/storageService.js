@@ -18,6 +18,7 @@ const MAX_TEXT_LENGTHS = {
   interfaceName: 256,
   interfaceDescription: 256,
   networkConnectionType: 64,
+  gatewayIp: 64,
   profileId: 128,
   lastSeenAt: 64,
   icon: 16
@@ -138,6 +139,7 @@ const normalizeNetworkBinding = (binding, profileIds) => {
       '',
       MAX_TEXT_LENGTHS.networkConnectionType
     ),
+    gatewayIp: normalizeText(binding?.gatewayIp, '', MAX_TEXT_LENGTHS.gatewayIp),
     profileId,
     meteringMode: requestedMode === 'metered' && !profileId ? 'unclassified' : requestedMode,
     lastSeenAt: normalizeText(binding?.lastSeenAt, '', MAX_TEXT_LENGTHS.lastSeenAt)

@@ -20,7 +20,8 @@ const identity = (fingerprint, networkName = 'Phone Hotspot B') => ({
   networkName,
   interfaceName: 'Wi-Fi',
   interfaceDescription: 'Wireless Adapter',
-  connectionType: 'Native 802.11'
+  connectionType: 'Native 802.11',
+  gatewayIp: '192.168.219.1'
 });
 
 test('a first-seen network creates and activates a tagged profile', () => {
@@ -33,6 +34,7 @@ test('a first-seen network creates and activates a tagged profile', () => {
   assert.equal(binding.fingerprint, 'network-v1-b');
   assert.equal(binding.interfaceName, 'Wi-Fi');
   assert.equal(binding.networkConnectionType, 'Native 802.11');
+  assert.equal(binding.gatewayIp, '192.168.219.1');
   assert.equal(binding.meteringMode, 'unclassified');
   assert.equal(binding.profileId, created.id);
   assert.equal(created.needsRegistration, true);

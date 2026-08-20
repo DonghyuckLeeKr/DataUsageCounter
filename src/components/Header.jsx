@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Settings, Monitor, Palette, Globe, ExternalLink, Calendar } from 'lucide-react';
 import { openRouterAdminPage } from '../services/routerDetectionService';
 import { getNetworkDisplayInfo } from '../utils/networkDisplay';
@@ -13,6 +13,7 @@ export default function Header({
   onSelectTheme,
   telemetry
 }) {
+  const [routerOpenError, setRouterOpenError] = useState('');
   const currentTheme = config.theme || 'soft-dark';
   const networkDisplay = getNetworkDisplayInfo(networkBinding || {});
   const currentNetworkLabel = networkBinding
@@ -42,6 +43,14 @@ export default function Header({
       : telemetry?.source === 'error'
         ? '계측 오류 · 사용량 누적 중지'
         : '계측 준비 중';
+  const handleOpenRouter = async () => {
+    setRouterOpenError('');
+    try {
+      await openRouterAdminPage(networkBinding?.gatewayIp);
+    } catch (error) {
+      setRouterOpenError(error instanceof Error ? error.message : '라우터 페이지를 열지 못했습니다.');
+    }
+  };
 
   return (
     <header
@@ -141,17 +150,43 @@ export default function Header({
           </button>
 
           {/* Open Router Admin Page Button */}
-          <button
-            type="button"
-            onClick={() => openRouterAdminPage()}
-            className="glass-btn"
-            style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)', cursor: 'pointer' }}
-            title="현재 네트워크의 라우터 관리자 페이지 열기"
-          >
-            <Globe size={14} />
-            <span>라우터</span>
-            <ExternalLink size={11} />
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={handleOpenRouter}
+              className="glass-btn"
+              style={{ padding: '6px 10px', fontSize: '0.78rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-blue)', cursor: 'pointer' }}
+              title={networkBinding?.gatewayIp
+                ? `${networkBinding.gatewayIp} 라우터 관리자 페이지 열기`
+                : '현재 네트워크의 기본 게이트웨이 확인 후 열기'}
+            >
+              <Globe size={14} />
+              <span>라우터</span>
+              <ExternalLink size={11} />
+            </button>
+            {routerOpenError && (
+              <div
+                role="alert"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  width: '260px',
+                  padding: '9px 11px',
+                  borderRadius: '9px',
+                  border: '1px solid rgba(244, 63, 94, 0.45)',
+                  background: 'rgba(31, 13, 28, 0.96)',
+                  color: '#fda4af',
+                  fontSize: '0.7rem',
+                  lineHeight: 1.45,
+                  boxShadow: '0 10px 28px rgba(0, 0, 0, 0.35)',
+                  zIndex: 1000
+                }}
+              >
+                {routerOpenError}
+              </div>
+            )}
+          </div>
 
           {/* Mini Floating Widget Toggle */}
           <button

@@ -19,6 +19,7 @@ const bindingFromIdentity = (identity, profileId, now) => ({
   interfaceName: safeText(identity.interfaceName),
   interfaceDescription: safeText(identity.interfaceDescription),
   networkConnectionType: safeText(identity.connectionType),
+  gatewayIp: safeText(identity.gatewayIp),
   profileId,
   meteringMode: 'unclassified',
   lastSeenAt: now.toISOString()
@@ -97,6 +98,7 @@ export const reconcileNetworkProfile = (config, identity, now = new Date()) => {
       interfaceName: safeText(identity.interfaceName) || existing.interfaceName,
       interfaceDescription: safeText(identity.interfaceDescription) || existing.interfaceDescription,
       networkConnectionType: safeText(identity.connectionType) || existing.networkConnectionType,
+      gatewayIp: safeText(identity.gatewayIp) || existing.gatewayIp,
       lastSeenAt: now.toISOString()
     };
     const profileId = profiles.some(profile => profile.id === refreshed.profileId)
@@ -110,7 +112,8 @@ export const reconcileNetworkProfile = (config, identity, now = new Date()) => {
       'identityKind',
       'interfaceName',
       'interfaceDescription',
-      'networkConnectionType'
+      'networkConnectionType',
+      'gatewayIp'
     ].some(key => refreshed[key] !== existing[key]);
 
     if (!shouldSwitch && !metadataChanged) {

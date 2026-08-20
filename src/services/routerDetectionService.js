@@ -3,6 +3,7 @@
 
 import { open } from '@tauri-apps/api/shell';
 import { isTauriAvailable } from './networkTelemetry';
+import { buildRouterAdminUrl } from '../utils/routerGateway';
 
 const COMMON_ROUTER_IPS = [
   { ip: '192.168.8.1', name: 'Huawei / HiLink Router' },
@@ -52,8 +53,15 @@ export const detectLteRouterCarrier = async () => {
 };
 
 export const openRouterAdminPage = async (customIp) => {
-  const targetIp = customIp || cachedGatewayIp || '192.168.0.1';
-  const targetUrl = targetIp.startsWith('http') ? targetIp : `http://${targetIp}/`;
+  let targetIp = customIp || cachedGatewayIp;
+  if (!targetIp) {
+    const detected = await detectLteRouterCarrier();
+    targetIp = detected.gatewayIp;
+  }
+  if (!targetIp) {
+    throw new Error('현재 네트워크의 기본 게이트웨이를 확인하지 못했습니다.');
+  }
+  const targetUrl = buildRouterAdminUrl(targetIp);
 
   if (isTauriAvailable()) {
     await open(targetUrl);
@@ -61,6 +69,8 @@ export const openRouterAdminPage = async (customIp) => {
   }
 
   if (typeof window !== 'undefined') {
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    const opened = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    if (!opened) throw new Error('브라우저에서 라우터 페이지를 열지 못했습니다.');
   }
+  return targetUrl;
 };

@@ -17,6 +17,7 @@ pub struct NetworkIdentity {
     pub interface_name: String,
     pub interface_description: String,
     pub connection_type: String,
+    pub gateway_ip: String,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -27,6 +28,7 @@ struct WindowsNetworkSnapshot {
     interface_name: Option<String>,
     interface_description: Option<String>,
     connection_type: Option<String>,
+    gateway_ip: Option<String>,
     gateway_mac: Option<String>,
 }
 
@@ -73,6 +75,7 @@ fn build_identity(snapshot: WindowsNetworkSnapshot) -> NetworkIdentity {
         .unwrap_or_default()
         .trim()
         .to_string();
+    let gateway_ip = snapshot.gateway_ip.unwrap_or_default().trim().to_string();
     let gateway_mac = normalize_mac(snapshot.gateway_mac);
     let normalized_network_name = network_name.to_lowercase();
 
@@ -95,6 +98,7 @@ fn build_identity(snapshot: WindowsNetworkSnapshot) -> NetworkIdentity {
         interface_name,
         interface_description,
         connection_type,
+        gateway_ip,
     }
 }
 
@@ -133,6 +137,7 @@ if ($gateway) {
   interfaceName = [string]$profile.InterfaceAlias
   interfaceDescription = [string]$adapter.InterfaceDescription
   connectionType = [string]$adapter.MediaType
+  gatewayIp = [string]$gateway
   gatewayMac = $gatewayMac
 } | ConvertTo-Json -Compress
 "#;
@@ -169,6 +174,7 @@ mod tests {
             interface_name: Some("Wi-Fi".to_string()),
             interface_description: Some("Wireless Adapter".to_string()),
             connection_type: Some("Native 802.11".to_string()),
+            gateway_ip: Some("192.168.219.1".to_string()),
             gateway_mac: Some(gateway_mac.to_string()),
         }
     }
@@ -180,6 +186,7 @@ mod tests {
 
         assert_eq!(first.fingerprint, second.fingerprint);
         assert_eq!(first.identity_kind, "gateway-mac");
+        assert_eq!(first.gateway_ip, "192.168.219.1");
     }
 
     #[test]

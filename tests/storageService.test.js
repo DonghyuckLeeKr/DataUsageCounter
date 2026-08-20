@@ -89,6 +89,7 @@ test('legacy profile network metadata migrates to a separate metered binding', (
     interfaceName: 'Wi-Fi',
     interfaceDescription: 'Intel Wi-Fi',
     networkConnectionType: 'Native 802.11',
+    gatewayIp: '',
     profileId: 'auto-b',
     meteringMode: 'metered',
     lastSeenAt: ''
