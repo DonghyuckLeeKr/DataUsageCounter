@@ -57,8 +57,8 @@ jobs:
           tagName: v__VERSION__
           releaseName: DolphinData v__VERSION__
           releaseBody: |
-            Windows installer and cryptographically signed automatic-update bundle.
-            See the repository changelog for details.
+            한글 업데이트 안내창과 설치 진행 상태를 적용했습니다.
+            서명된 Windows 자동 업데이트 번들과 설치 파일을 제공합니다.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true

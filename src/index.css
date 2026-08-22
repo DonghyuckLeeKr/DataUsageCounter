@@ -230,6 +230,19 @@ html, body, #root {
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
 }
 
+.glass-btn:focus-visible {
+  outline: 2px solid var(--brand-color);
+  outline-offset: 2px;
+}
+
+@keyframes updateSpin {
+  to { transform: rotate(360deg); }
+}
+
+.update-spin {
+  animation: updateSpin 0.9s linear infinite;
+}
+
 .titlebar-btn {
   background: none;
   border: none;

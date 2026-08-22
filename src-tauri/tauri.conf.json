@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "DolphinData",
-    "version": "1.2.6"
+    "version": "1.2.7"
   },
   "tauri": {
     "allowlist": {
@@ -59,7 +59,7 @@
     },
     "updater": {
       "active": true,
-      "dialog": true,
+      "dialog": false,
       "endpoints": [
         "https://github.com/DonghyuckLeeKr/DolphinData/releases/latest/download/latest.json"
       ],

@@ -35,6 +35,8 @@ import CalibrationModal from './components/CalibrationModal';
 import SettingsModal from './components/SettingsModal';
 import DailyHistoryModal from './components/DailyHistoryModal';
 import NetworkClassificationModal from './components/NetworkClassificationModal';
+import UpdateModal from './components/UpdateModal';
+import { checkForAppUpdate, installAppUpdate } from './services/updateService';
 
 export default function App() {
   const [config, setConfig] = useState(loadConfig());
@@ -52,11 +54,15 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDailyHistory, setShowDailyHistory] = useState(false);
   const [pendingNetworkFingerprint, setPendingNetworkFingerprint] = useState('');
+  const [availableUpdate, setAvailableUpdate] = useState(null);
+  const [updateStatus, setUpdateStatus] = useState('idle');
+  const [updateError, setUpdateError] = useState('');
 
   // useRef to always hold the latest config without re-creating intervals
   const configRef = useRef(config);
   const lastNetworkFingerprintRef = useRef('');
   const networkDetectionInFlightRef = useRef(false);
+  const updateCheckStartedRef = useRef(false);
   useEffect(() => {
     configRef.current = config;
   }, [config]);
@@ -94,6 +100,36 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', config.theme || 'soft-dark');
   }, [config.theme]);
+
+  // Use an in-app Korean update dialog instead of Tauri's default English message box.
+  useEffect(() => {
+    if (!isTauriAvailable() || updateCheckStartedRef.current) return undefined;
+    updateCheckStartedRef.current = true;
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkForAppUpdate();
+        if (!cancelled && result.shouldUpdate) {
+          setAvailableUpdate(result);
+          setConfig(prev => {
+            if (!prev.miniMode) return prev;
+            const updated = { ...prev, miniMode: false };
+            saveConfig(updated);
+            return updated;
+          });
+        }
+      } catch (error) {
+        console.warn('Automatic update check failed', error);
+      }
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      updateCheckStartedRef.current = false;
+    };
+  }, []);
 
   // Adjust Tauri window size & always-on-top mode dynamically when switching miniMode
   useEffect(() => {
@@ -379,6 +415,26 @@ export default function App() {
     setShowCalibration(true);
   }, []);
 
+  const handleInstallUpdate = useCallback(async () => {
+    setUpdateStatus('installing');
+    setUpdateError('');
+    try {
+      await installAppUpdate();
+      setUpdateStatus('restarting');
+    } catch (error) {
+      console.error('Update installation failed', error);
+      setUpdateStatus('error');
+      setUpdateError(String(error || 'update failed'));
+    }
+  }, []);
+
+  const handleCloseUpdate = useCallback(() => {
+    if (updateStatus === 'installing' || updateStatus === 'restarting') return;
+    setAvailableUpdate(null);
+    setUpdateError('');
+    setUpdateStatus('idle');
+  }, [updateStatus]);
+
   // Render Always-on-top Mini Gadget View if miniMode is active
   if (config.miniMode) {
     return (
@@ -511,6 +567,16 @@ export default function App() {
           profiles={config.profiles || []}
           onSave={handleUpdateNetworkBinding}
           onClose={handleCloseNetworkClassification}
+        />
+      )}
+
+      {availableUpdate && (
+        <UpdateModal
+          update={availableUpdate}
+          status={updateStatus}
+          error={updateError}
+          onInstall={handleInstallUpdate}
+          onClose={handleCloseUpdate}
         />
       )}
 
