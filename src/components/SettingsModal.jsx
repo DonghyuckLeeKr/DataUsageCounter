@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { X, Check, Settings, Download, Upload, FileText, Power, Wifi } from 'lucide-react';
-import { setAutoStart, getAutoStart } from '../services/networkTelemetry';
+import { X, Check, Settings, Download, Upload, FileText, Power, Wifi, Info, Mail } from 'lucide-react';
+import { open } from '@tauri-apps/api/shell';
+import { setAutoStart, getAutoStart, isTauriAvailable } from '../services/networkTelemetry';
+import { getInstalledAppVersion } from '../services/updateService';
 import { getNetworkDisplayInfo } from '../utils/networkDisplay';
+import { buildSupportMailto, SUPPORT_EMAIL } from '../utils/appMetadata';
 import { MAX_BACKUP_FILE_BYTES, parseBackupConfig } from '../services/backupService';
 import { createCsvRow } from '../utils/csvSecurity';
 
@@ -18,6 +21,7 @@ function SettingsModal({
   const [boundProfileId, setBoundProfileId] = useState(networkBinding?.profileId || activeProfile?.id || '');
   const [unitMode, setUnitMode] = useState(config?.unitMode || 'MBs');
   const [autoStartEnabled, setAutoStartEnabled] = useState(Boolean(config?.autoStart));
+  const [appVersion, setAppVersion] = useState('확인 중');
   const [dailySurgeLimit, setDailySurgeLimit] = useState(
     config?.dailySurgeLimitGB !== undefined ? String(config.dailySurgeLimitGB) : '5'
   );
@@ -34,6 +38,35 @@ function SettingsModal({
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isTauriAvailable()) {
+      setAppVersion('개발 버전');
+      return undefined;
+    }
+    let isMounted = true;
+    getInstalledAppVersion()
+      .then(version => {
+        if (isMounted) setAppVersion(version || '알 수 없음');
+      })
+      .catch(error => {
+        console.warn('Failed to read application version', error);
+        if (isMounted) setAppVersion('알 수 없음');
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleOpenSupportEmail = async () => {
+    const mailto = buildSupportMailto(appVersion);
+    try {
+      await open(mailto);
+    } catch (error) {
+      console.warn('Failed to open the default mail application', error);
+      window.location.href = mailto;
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -129,6 +162,7 @@ function SettingsModal({
     ignored: '이 네트워크는 사용량 누적에서 제외합니다.',
     unclassified: '아직 분류하지 않았습니다. 분류 전에는 사용량을 누적하지 않습니다.'
   };
+  const displayedAppVersion = /^\d+\.\d+\.\d+/.test(appVersion) ? `v${appVersion}` : appVersion;
 
   // Export Full JSON Configuration Backup
   const handleExportJSON = () => {
@@ -460,6 +494,36 @@ function SettingsModal({
               >
                 <Upload size={14} />
                 <span>설정 파일(.json) 불러오기 및 복원</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Application version and support contact */}
+          <div>
+            <label style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
+              앱 정보 및 문의
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.4fr', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minHeight: '54px', padding: '10px 12px', borderRadius: '10px', background: 'var(--glass-card)', border: '1px solid var(--glass-border-light)' }}>
+                <Info size={17} color="var(--brand-color)" />
+                <div>
+                  <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem' }}>현재 버전</span>
+                  <strong style={{ color: 'var(--text-main)', fontSize: '0.84rem' }}>{displayedAppVersion}</strong>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenSupportEmail}
+                className="glass-btn"
+                aria-label={`문의 메일 보내기: ${SUPPORT_EMAIL}`}
+                title="기본 메일 앱으로 문의 메일을 작성합니다."
+                style={{ minHeight: '54px', justifyContent: 'flex-start', padding: '10px 12px', cursor: 'pointer', overflow: 'hidden' }}
+              >
+                <Mail size={17} color="var(--accent-emerald)" style={{ flex: '0 0 auto' }} />
+                <span style={{ minWidth: 0, textAlign: 'left' }}>
+                  <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 500 }}>개발자 문의</span>
+                  <strong style={{ display: 'block', color: 'var(--text-main)', fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{SUPPORT_EMAIL}</strong>
+                </span>
               </button>
             </div>
           </div>
