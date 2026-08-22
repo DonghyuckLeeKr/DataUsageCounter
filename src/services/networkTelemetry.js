@@ -141,14 +141,22 @@ export const fetchTopProcesses = async () => {
     try {
       const invoke = await getTauriInvoke();
       if (invoke) {
-        const list = await invoke('get_top_processes');
-        if (Array.isArray(list)) {
-          return list.map(p => ({
+        const snapshot = await invoke('get_top_processes');
+        if (snapshot && Array.isArray(snapshot.processes)) {
+          return {
+            source: snapshot.source || 'unavailable',
+            error: snapshot.error || null,
+            processes: snapshot.processes.map(p => ({
             pid: p.pid,
             name: p.name,
+            downloadBytesPerSec: p.download_bytes_per_sec,
+            uploadBytesPerSec: p.upload_bytes_per_sec,
+            sessionDownloadBytes: p.session_download_bytes,
+            sessionUploadBytes: p.session_upload_bytes,
             cpuPercent: p.cpu_percent,
             memoryBytes: p.memory_bytes
-          }));
+            }))
+          };
         }
       }
     } catch (e) {
@@ -156,7 +164,11 @@ export const fetchTopProcesses = async () => {
     }
   }
 
-  return [];
+  return {
+    source: 'unavailable',
+    error: '프로세스별 네트워크 사용량은 Windows 데스크톱 앱에서 표시됩니다.',
+    processes: []
+  };
 };
 
 export const terminateProcess = async (pid) => {

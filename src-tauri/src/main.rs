@@ -2,8 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use data_usage_counter::network_identity::{detect_current_network_identity, NetworkIdentity};
+use data_usage_counter::process_network::ProcessNetworkMonitor;
 use data_usage_counter::telemetry::{NetworkSampler, TelemetryData};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use sysinfo::{Pid, System};
@@ -94,12 +96,24 @@ fn listen_for_relaunch(app: tauri::AppHandle, event: isize) {
 pub struct ProcessActivityInfo {
     pub pid: u32,
     pub name: String,
+    pub download_bytes_per_sec: u64,
+    pub upload_bytes_per_sec: u64,
+    pub session_download_bytes: u64,
+    pub session_upload_bytes: u64,
     pub cpu_percent: f32,
     pub memory_bytes: u64,
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub struct ProcessActivitySnapshot {
+    pub source: String,
+    pub error: Option<String>,
+    pub processes: Vec<ProcessActivityInfo>,
+}
+
 struct AppState {
     network_sampler: Arc<Mutex<NetworkSampler>>,
+    process_network_monitor: ProcessNetworkMonitor,
     sys: Arc<Mutex<System>>,
 }
 
@@ -224,9 +238,11 @@ fn set_mini_mode(mini: bool, window: tauri::Window) {
 }
 
 #[tauri::command]
-fn get_top_processes(state: State<AppState>) -> Vec<ProcessActivityInfo> {
+fn get_top_processes(state: State<AppState>) -> ProcessActivitySnapshot {
     let mut sys = state.sys.lock().unwrap();
     sys.refresh_processes();
+    let active_pids: HashSet<u32> = sys.processes().keys().map(|pid| pid.as_u32()).collect();
+    let network = state.process_network_monitor.sample(&active_pids);
 
     let mut list: Vec<ProcessActivityInfo> = Vec::new();
 
@@ -234,10 +250,30 @@ fn get_top_processes(state: State<AppState>) -> Vec<ProcessActivityInfo> {
         let cpu = process.cpu_usage();
         let mem = process.memory();
 
-        if cpu > 0.05 || mem > 30 * 1024 * 1024 {
+        let usage = network
+            .usage_by_pid
+            .get(&pid.as_u32())
+            .copied()
+            .unwrap_or_default();
+        let network_bytes_per_sec = usage
+            .download_bytes_per_sec
+            .saturating_add(usage.upload_bytes_per_sec);
+        let session_network_bytes = usage
+            .session_download_bytes
+            .saturating_add(usage.session_upload_bytes);
+
+        if network_bytes_per_sec > 0
+            || session_network_bytes > 0
+            || cpu > 0.05
+            || mem > 30 * 1024 * 1024
+        {
             list.push(ProcessActivityInfo {
                 pid: pid.as_u32(),
                 name: process.name().to_string(),
+                download_bytes_per_sec: usage.download_bytes_per_sec,
+                upload_bytes_per_sec: usage.upload_bytes_per_sec,
+                session_download_bytes: usage.session_download_bytes,
+                session_upload_bytes: usage.session_upload_bytes,
                 cpu_percent: cpu,
                 memory_bytes: mem,
             });
@@ -245,13 +281,33 @@ fn get_top_processes(state: State<AppState>) -> Vec<ProcessActivityInfo> {
     }
 
     list.sort_by(|a, b| {
-        b.cpu_percent
-            .partial_cmp(&a.cpu_percent)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        b.download_bytes_per_sec
+            .saturating_add(b.upload_bytes_per_sec)
+            .cmp(
+                &a.download_bytes_per_sec
+                    .saturating_add(a.upload_bytes_per_sec),
+            )
+            .then_with(|| {
+                b.session_download_bytes
+                    .saturating_add(b.session_upload_bytes)
+                    .cmp(
+                        &a.session_download_bytes
+                            .saturating_add(a.session_upload_bytes),
+                    )
+            })
+            .then_with(|| {
+                b.cpu_percent
+                    .partial_cmp(&a.cpu_percent)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .then_with(|| b.memory_bytes.cmp(&a.memory_bytes))
     });
     list.truncate(12);
-    list
+    ProcessActivitySnapshot {
+        source: network.source,
+        error: network.error,
+        processes: list,
+    }
 }
 
 #[tauri::command]
@@ -308,6 +364,7 @@ fn main() {
 
     let state = AppState {
         network_sampler: Arc::new(Mutex::new(NetworkSampler::new())),
+        process_network_monitor: ProcessNetworkMonitor::start(),
         sys: Arc::new(Mutex::new(sys)),
     };
 
