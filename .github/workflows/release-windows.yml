@@ -40,6 +40,9 @@ jobs:
       - name: Run JavaScript tests
         run: npm test
 
+      - name: Build frontend for Tauri context
+        run: npm run build
+
       - name: Run Rust tests
         working-directory: src-tauri
         run: cargo test --locked
